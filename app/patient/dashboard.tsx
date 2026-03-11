@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth, db } from '../../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
-import { SIZES, FONTS } from '../../constants/theme';
+import { SIZES, FONTS, COLORS } from '../../constants/theme';
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -14,6 +14,21 @@ export default function PatientDashboard() {
   const [patientData, setPatientData] = useState<any>(null);
   const [caregiverData, setCaregiverData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState('');
+  const [currentTime, setCurrentTime] = useState('');
+
+  useEffect(() => {
+    const updateDateTime = () => {
+      const now = new Date();
+      const dateOptions: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+      const timeOptions: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+      setCurrentDate(now.toLocaleDateString('ar-SA', dateOptions));
+      setCurrentTime(now.toLocaleTimeString('ar-SA', timeOptions));
+    };
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const fetchPatientAndCaregiverData = async () => {
@@ -52,6 +67,23 @@ export default function PatientDashboard() {
         headerShown: false, // Hide header for patient dashboard for simplicity
       }} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.topBar}>
+          <View style={styles.dateTimeContainer}>
+            <Text style={[styles.dateText, { color: dynamicColors.textMuted }]}>{currentDate}</Text>
+            <Text style={[styles.timeText, { color: dynamicColors.textMuted }]}>{currentTime}</Text>
+          </View>
+        </View>
+
+        <View style={styles.appHeaderContainer}>
+          <View style={styles.logoAndNameWrapper}>
+            <Image source={require('../../app/images/logo.png')} style={styles.logo} />
+            <View style={styles.appNameContainer}>
+              <Text style={[styles.appNamePart1, { color: COLORS.secondary }]}>رفيق</Text>
+              <Text style={[styles.appNamePart2, { color: COLORS.primary }]}>الذاكرة</Text>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.header}>
           <Text style={[styles.greeting, { color: dynamicColors.textDark }]}>مرحباً بك، {patientData?.name || 'المريض'}!</Text>
           {caregiverData?.profileImage ? (
@@ -78,7 +110,13 @@ export default function PatientDashboard() {
           <Text style={[styles.memoryBankButtonText, { color: dynamicColors.textLight }]}>بنك الذكريات</Text>
         </TouchableOpacity>
 
-        {/* Add more patient-specific features here later */}
+        <TouchableOpacity 
+          style={[styles.memoryBankButton, { backgroundColor: dynamicColors.secondary }]} 
+          onPress={() => router.push('/patient/ai-chat')}
+        >
+          <MaterialCommunityIcons name="chat-outline" size={30} color={dynamicColors.textLight} />
+          <Text style={[styles.memoryBankButtonText, { color: dynamicColors.textLight }]}>الدردشة مع المساعد</Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </SafeAreaView>
@@ -89,6 +127,51 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: SIZES.padding, alignItems: 'center' },
+  topBar: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: SIZES.padding,
+  },
+  dateTimeContainer: {
+    alignItems: 'flex-end',
+  },
+  dateText: {
+    fontSize: SIZES.caption,
+    fontWeight: FONTS.medium,
+  },
+  timeText: {
+    fontSize: SIZES.body,
+    fontWeight: FONTS.bold,
+    marginTop: 4,
+  },
+  appHeaderContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: SIZES.padding * 2,
+  },
+  logoAndNameWrapper: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 50,
+    height: 50,
+    marginLeft: SIZES.base,
+  },
+  appNameContainer: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+  },
+  appNamePart1: {
+    fontSize: SIZES.h2,
+    fontWeight: FONTS.bold,
+    marginRight: SIZES.base / 2,
+  },
+  appNamePart2: {
+    fontSize: SIZES.h2,
+    fontWeight: FONTS.bold,
+  },
   header: {
     alignItems: 'center',
     marginBottom: SIZES.padding * 2,

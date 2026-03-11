@@ -16,12 +16,17 @@ const SettingItem = ({ icon, title, value, onPress, type = 'link', itemColor, is
   return (
     <TouchableOpacity 
       style={[styles.settingItem, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]} 
-      onPress={onPress} 
+      onPress={type === 'switch' ? undefined : onPress} 
       disabled={type === 'switch'}
+      activeOpacity={type === 'switch' ? 1 : 0.7}
     >
       <View style={styles.settingItemLeft}>
         {type === 'link' && <MaterialCommunityIcons name="chevron-left" size={24} color={dynamicColors.textMuted} />}
-        {type === 'switch' && value}
+        {type === 'switch' && (
+          <TouchableOpacity onPress={onPress} style={{ marginRight: SIZES.base }}>
+            {value}
+          </TouchableOpacity>
+        )}
       </View>
       <View style={styles.settingItemRight}>
         <View style={[styles.iconWrapper, { backgroundColor: currentItemColor + '15' }]}>
@@ -141,7 +146,7 @@ export default function SettingsScreen() {
           />
           <SettingItem 
             icon="chart-line" 
-            title={`المرحلة الحالية: ${userData?.patientStage === 'early' ? 'مبكرة' : 'متوسطة'}`} 
+            title={`المرحلة الحالية: ${userData?.patientStage === 'early' ? 'مبكرة' : userData?.patientStage === 'moderate' ? 'متوسطة' : 'متأخرة'}`} 
             onPress={() => {}} 
             isDarkMode={isDarkMode}
             itemColor={dynamicColors.textDark}
