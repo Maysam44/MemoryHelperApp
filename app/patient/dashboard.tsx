@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import { auth, db } from '../../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -64,17 +66,11 @@ export default function PatientDashboard() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen options={{
-        headerShown: false, // Hide header for patient dashboard for simplicity
+        headerShown: false,
       }} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.topBar}>
-          <View style={styles.dateTimeContainer}>
-            <Text style={[styles.dateText, { color: dynamicColors.textMuted }]}>{currentDate}</Text>
-            <Text style={[styles.timeText, { color: dynamicColors.textMuted }]}>{currentTime}</Text>
-          </View>
-        </View>
-
-        <View style={styles.appHeaderContainer}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Header Section with Logo and App Name */}
+        <View style={styles.headerSection}>
           <View style={styles.logoAndNameWrapper}>
             <Image source={require('../../app/images/logo.png')} style={styles.logo} />
             <View style={styles.appNameContainer}>
@@ -82,42 +78,80 @@ export default function PatientDashboard() {
               <Text style={[styles.appNamePart2, { color: COLORS.primary }]}>الذاكرة</Text>
             </View>
           </View>
+
+          {/* Date and Time Below Logo */}
+          <View style={styles.dateTimeContainer}>
+            <Text style={[styles.timeText, { color: dynamicColors.textMuted }]}>{currentTime}</Text>
+            <Text style={[styles.dateText, { color: dynamicColors.textMuted }]}>{currentDate}</Text>
+          </View>
         </View>
 
-        <View style={styles.header}>
-          <Text style={[styles.greeting, { color: dynamicColors.textDark }]}>مرحباً بك، {patientData?.name || 'المريض'}!</Text>
-          {caregiverData?.profileImage ? (
-            <Image source={{ uri: caregiverData.profileImage }} style={styles.caregiverImage} />
-          ) : (
-            <View style={[styles.caregiverImagePlaceholder, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-              <MaterialCommunityIcons name="account-circle-outline" size={50} color={dynamicColors.textMuted} />
+        {/* Caregiver Info Card */}
+        <View style={[styles.caregiverCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
+          <View style={styles.caregiverContent}>
+            <View style={styles.caregiverTextWrapper}>
+              <Text style={[styles.caregiverLabel, { color: dynamicColors.textMuted }]}>مقدم الرعاية</Text>
+              <Text style={[styles.caregiverName, { color: dynamicColors.textDark }]}>{caregiverData?.name || 'غير معروف'}</Text>
             </View>
-          )}
-          <Text style={[styles.caregiverName, { color: dynamicColors.textMuted }]}>مقدم الرعاية: {caregiverData?.name || 'غير معروف'}</Text>
+            {caregiverData?.profileImage ? (
+              <Image source={{ uri: caregiverData.profileImage }} style={styles.caregiverImage} />
+            ) : (
+              <View style={[styles.caregiverImagePlaceholder, { backgroundColor: dynamicColors.backgroundLight }]}>
+                <MaterialCommunityIcons name="account-circle-outline" size={40} color={dynamicColors.textMuted} />
+              </View>
+            )}
+          </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-          <Text style={[styles.cardTitle, { color: dynamicColors.textDark }]}>معلوماتك</Text>
-          <Text style={[styles.cardText, { color: dynamicColors.textMuted }]}>العمر: {patientData?.age || 'غير محدد'}</Text>
-          <Text style={[styles.cardText, { color: dynamicColors.textMuted }]}>المرحلة: {patientData?.stage === 'early' ? 'مبكرة' : patientData?.stage === 'moderate' ? 'متوسطة' : 'متأخرة'}</Text>
+        {/* Patient Info Card */}
+        <View style={[styles.infoCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
+          <View style={styles.infoRow}>
+            <View style={styles.infoItem}>
+              <MaterialCommunityIcons name="cake-variant" size={24} color={dynamicColors.primary} />
+              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>العمر</Text>
+              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>{patientData?.age || 'غير محدد'}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <MaterialCommunityIcons name="chart-line" size={24} color={dynamicColors.secondary} />
+              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>المرحلة</Text>
+              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>
+                {patientData?.stage === 'early' ? 'مبكرة' : patientData?.stage === 'moderate' ? 'متوسطة' : 'متأخرة'}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.memoryBankButton, { backgroundColor: dynamicColors.primary }]} 
-          onPress={() => router.push('/patient/memory-bank')}
-        >
-          <MaterialCommunityIcons name="brain" size={30} color={dynamicColors.textLight} />
-          <Text style={[styles.memoryBankButtonText, { color: dynamicColors.textLight }]}>بنك الذكريات</Text>
-        </TouchableOpacity>
+        {/* Greeting */}
+        <Text style={[styles.greeting, { color: dynamicColors.textDark }]}>
+          مرحباً بك، {patientData?.name || 'المريض'}! 👋
+        </Text>
 
-        <TouchableOpacity 
-          style={[styles.memoryBankButton, { backgroundColor: dynamicColors.secondary }]} 
-          onPress={() => router.push('/patient/ai-chat')}
-        >
-          <MaterialCommunityIcons name="chat-outline" size={30} color={dynamicColors.textLight} />
-          <Text style={[styles.memoryBankButtonText, { color: dynamicColors.textLight }]}>الدردشة مع المساعد</Text>
-        </TouchableOpacity>
+        {/* Features Grid */}
+        <View style={styles.featuresGrid}>
+          <TouchableOpacity 
+            style={[styles.featureButton, { backgroundColor: dynamicColors.primary }]} 
+            onPress={() => router.push('/patient/memory-bank')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.featureIconWrapper}>
+              <MaterialCommunityIcons name="brain" size={32} color={dynamicColors.textLight} />
+            </View>
+            <Text style={[styles.featureTitle, { color: dynamicColors.textLight }]}>بنك الذكريات</Text>
+            <Text style={[styles.featureSubtitle, { color: dynamicColors.textLight }]}>استرجع ذكرياتك</Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity 
+            style={[styles.featureButton, { backgroundColor: dynamicColors.secondary }]} 
+            onPress={() => router.push('/patient/ai-chat')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.featureIconWrapper}>
+              <MaterialCommunityIcons name="chat-outline" size={32} color={dynamicColors.textLight} />
+            </View>
+            <Text style={[styles.featureTitle, { color: dynamicColors.textLight }]}>المساعد الذكي</Text>
+            <Text style={[styles.featureSubtitle, { color: dynamicColors.textLight }]}>تحدث معي</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -126,37 +160,28 @@ export default function PatientDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { padding: SIZES.padding, alignItems: 'center' },
-  topBar: {
-    width: '100%',
-    alignItems: 'flex-end',
-    marginBottom: SIZES.padding,
+  scrollContent: { 
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.padding * 3,
+    alignItems: 'center',
   },
-  dateTimeContainer: {
-    alignItems: 'flex-end',
-  },
-  dateText: {
-    fontSize: SIZES.caption,
-    fontWeight: FONTS.medium,
-  },
-  timeText: {
-    fontSize: SIZES.body,
-    fontWeight: FONTS.bold,
-    marginTop: 4,
-  },
-  appHeaderContainer: {
+  
+  /* Header Section */
+  headerSection: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: SIZES.padding * 2,
+    marginBottom: SIZES.padding * 2.5,
   },
   logoAndNameWrapper: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: SIZES.padding,
   },
   logo: {
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     marginLeft: SIZES.base,
   },
   appNameContainer: {
@@ -164,72 +189,132 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appNamePart1: {
-    fontSize: SIZES.h2,
-    fontWeight: FONTS.bold,
-    marginRight: SIZES.base / 2,
-  },
-  appNamePart2: {
-    fontSize: SIZES.h2,
-    fontWeight: FONTS.bold,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: SIZES.padding * 2,
-    width: '100%',
-  },
-  greeting: {
     fontSize: SIZES.h1,
     fontWeight: FONTS.bold,
-    marginBottom: SIZES.base,
-    textAlign: 'center',
+    marginRight: SIZES.base,
   },
-  caregiverImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: SIZES.base,
+  appNamePart2: {
+    fontSize: SIZES.h1,
+    fontWeight: FONTS.bold,
   },
-  caregiverImagePlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
+  dateTimeContainer: {
     alignItems: 'center',
-    marginBottom: SIZES.base,
+  },
+  dateText: {
+    fontSize: SIZES.caption,
+    fontWeight: FONTS.medium,
+    marginTop: SIZES.base / 2,
+  },
+  timeText: {
+    fontSize: SIZES.h3,
+    fontWeight: FONTS.bold,
+  },
+
+  /* Caregiver Card */
+  caregiverCard: {
+    width: '100%',
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
     borderWidth: 1,
+    marginBottom: SIZES.padding * 1.5,
+  },
+  caregiverContent: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  caregiverTextWrapper: {
+    flex: 1,
+    marginRight: SIZES.padding,
+  },
+  caregiverLabel: {
+    fontSize: SIZES.caption,
+    fontWeight: FONTS.medium,
+    marginBottom: SIZES.base / 2,
   },
   caregiverName: {
-    fontSize: SIZES.body,
-    textAlign: 'center',
+    fontSize: SIZES.h3,
+    fontWeight: FONTS.bold,
   },
-  card: {
+  caregiverImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  caregiverImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Info Card */
+  infoCard: {
     width: '100%',
     padding: SIZES.padding,
     borderRadius: SIZES.radius,
     borderWidth: 1,
     marginBottom: SIZES.padding * 2,
-    alignItems: 'flex-end',
   },
-  cardTitle: {
-    fontSize: SIZES.h2,
-    fontWeight: FONTS.bold,
-    marginBottom: SIZES.base,
-  },
-  cardText: {
-    fontSize: SIZES.body,
-    marginBottom: SIZES.base / 2,
-  },
-  memoryBankButton: {
+  infoRow: {
     flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SIZES.padding,
-    borderRadius: SIZES.radius,
-    width: '100%',
+    justifyContent: 'space-around',
   },
-  memoryBankButtonText: {
+  infoItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: SIZES.caption,
+    fontWeight: FONTS.medium,
+    marginTop: SIZES.base / 2,
+  },
+  infoValue: {
     fontSize: SIZES.h3,
     fontWeight: FONTS.bold,
-    marginLeft: SIZES.base,
+    marginTop: SIZES.base / 2,
+  },
+
+  /* Greeting */
+  greeting: {
+    fontSize: SIZES.h2,
+    fontWeight: FONTS.bold,
+    marginBottom: SIZES.padding * 2,
+    textAlign: 'center',
+  },
+
+  /* Features Grid */
+  featuresGrid: {
+    width: '100%',
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    gap: SIZES.padding,
+  },
+  featureButton: {
+    flex: 1,
+    paddingVertical: SIZES.padding * 1.5,
+    paddingHorizontal: SIZES.padding,
+    borderRadius: SIZES.radius,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  featureIconWrapper: {
+    marginBottom: SIZES.base,
+  },
+  featureTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: FONTS.bold,
+    marginBottom: SIZES.base / 2,
+  },
+  featureSubtitle: {
+    fontSize: SIZES.caption,
+    fontWeight: FONTS.medium,
+    opacity: 0.9,
   },
 });
