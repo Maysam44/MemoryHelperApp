@@ -11,6 +11,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -19,6 +20,13 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import { OpenAI } from 'openai';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true, // Required for client-side usage in React Native
+});
 
 interface Message {
   id: string;
@@ -28,51 +36,13 @@ interface Message {
   imageUri?: string;
 }
 
-// AI Response patterns based on user input
-const generateContextualResponse = (userMessage: string): string => {
-  const lowerMessage = userMessage.toLowerCase();
-  
-  // Health-related responses
-  if (lowerMessage.includes('صحة') || lowerMessage.includes('ألم') || lowerMessage.includes('مرض')) {
-    return 'أنا قلق على صحتك. هل تريد أن تخبرني أكثر عن الأعراض التي تشعر بها؟ قد أساعدك في فهم الموقف بشكل أفضل.';
-  }
-  
-  // Memory-related responses
-  if (lowerMessage.includes('ذكرى') || lowerMessage.includes('تذكر') || lowerMessage.includes('نسيت')) {
-    return 'الذكريات مهمة جداً. يمكنك الاطلاع على بنك الذكريات الخاص بك لاسترجاع الأشخاص والأماكن المهمة. هل تريد مساعدة في البحث عن ذكرى معينة؟';
-  }
-  
-  // Greeting responses
-  if (lowerMessage.includes('مرحبا') || lowerMessage.includes('السلام') || lowerMessage.includes('كيف حالك')) {
-    return 'مرحباً! أنا بخير، شكراً لسؤالك. كيف حالك أنت اليوم؟ هل هناك شيء أستطيع مساعدتك به؟';
-  }
-  
-  // Family-related responses
-  if (lowerMessage.includes('عائلة') || lowerMessage.includes('أهل') || lowerMessage.includes('أطفال') || lowerMessage.includes('زوج') || lowerMessage.includes('والد')) {
-    return 'عائلتك مهمة جداً. يمكنك مشاركة صورهم وقصصهم في بنك الذكريات. هل تريد أن تخبرني عن شخص مهم في حياتك؟';
-  }
-  
-  // Time-related responses
-  if (lowerMessage.includes('وقت') || lowerMessage.includes('ساعة') || lowerMessage.includes('يوم') || lowerMessage.includes('أمس')) {
-    return 'الوقت يمر بسرعة. ما الذي تتذكره من اليوم؟ أم أنك تريد أن تخطط لشيء في المستقبل القريب؟';
-  }
-  
-  // Help/assistance responses
-  if (lowerMessage.includes('ساعد') || lowerMessage.includes('أحتاج') || lowerMessage.includes('مساعدة') || lowerMessage.includes('كيف')) {
-    return 'أنا هنا لمساعدتك! يمكنك أن تسأل عن أي شيء، أو تشارك صورك وذكرياتك. ماذا تحتاج؟';
-  }
-  
-  // Default response
-  return `شكراً لك على قول: "${userMessage}". هذا موضوع مهم. هل يمكنك أن تخبرني المزيد عن هذا؟`;
-};
-
 export default function AIChatScreen() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'مرحباً! أنا مساعدك الذكي. أنا هنا لمساعدتك والاستماع إليك. كيف يمكنني مساعدتك اليوم؟',
+      text: 'مرحباً! أنا رفيقك الذكي، مدعوم بتقنيات ChatGPT. أنا هنا لأستمع إليك وأساعدك في تذكر الأشياء الجميلة. كيف تشعر اليوم؟',
       sender: 'ai',
       timestamp: new Date(),
     },
@@ -92,28 +62,44 @@ export default function AIChatScreen() {
     scrollToBottom();
   }, [messages]);
 
+  const getChatGPTResponse = async (userText: string) => {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { 
+            role: "system", 
+            content: "أنت مساعد ذكي لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر وضعف الذاكرة. وظيفتك هي أن تكون رفيقاً صبوراً، حنوناً، ومشجعاً. استخدم لغة عربية بسيطة وودودة. ساعدهم على تذكر الأشياء الإيجابية، ولا تصحح أخطاءهم بشكل فج. كن رفيقاً حقيقياً." 
+          },
+          { role: "user", content: userText }
+        ],
+      });
+
+      return response.choices[0].message.content || "عذراً، لم أستطع فهم ذلك جيداً. هل يمكنك إعادة المحاولة؟";
+    } catch (error) {
+      console.error("OpenAI Error:", error);
+      return "أنا أواجه مشكلة في الاتصال بالإنترنت حالياً، ولكنني دائماً هنا بجانبك.";
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
+    const userText = inputText.trim();
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText,
+      text: userText,
       sender: 'user',
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const userInput = inputText;
     setInputText('');
     setIsLoading(true);
-    scrollToBottom();
+    Keyboard.dismiss();
 
     try {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      
-      // Generate contextual response based on user input
-      const aiResponseText = generateContextualResponse(userInput);
+      const aiResponseText = await getChatGPTResponse(userText);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -123,9 +109,8 @@ export default function AIChatScreen() {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-      scrollToBottom();
     } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ في الحصول على الرد. حاول مرة أخرى.');
+      Alert.alert('خطأ', 'حدث خطأ في الحصول على الرد.');
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +130,7 @@ export default function AIChatScreen() {
         
         const userMessage: Message = {
           id: Date.now().toString(),
-          text: 'لقد شاركت صورة معك',
+          text: 'شاركت صورة معك',
           sender: 'user',
           timestamp: new Date(),
           imageUri,
@@ -153,23 +138,18 @@ export default function AIChatScreen() {
 
         setMessages((prev) => [...prev, userMessage]);
         setIsLoading(true);
-        scrollToBottom();
 
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          
+        // Simple AI response for image
+        setTimeout(() => {
           const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
-            text: 'شكراً لمشاركة هذه الصورة معي! إنها جميلة جداً. هل تريد أن تخبرني قصة عن هذه الصورة؟',
+            text: 'يا لها من صورة جميلة! هل تحمل هذه الصورة ذكرى معينة تحب أن تحكي لي عنها؟',
             sender: 'ai',
             timestamp: new Date(),
           };
-
           setMessages((prev) => [...prev, aiMessage]);
-          scrollToBottom();
-        } finally {
           setIsLoading(false);
-        }
+        }, 1500);
       }
     } catch (error) {
       Alert.alert('خطأ', 'حدث خطأ في اختيار الصورة.');
@@ -187,11 +167,11 @@ export default function AIChatScreen() {
           language: 'ar-SA',
           rate: 0.9,
           pitch: 1,
+          onDone: () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
         });
-        setIsSpeaking(false);
       }
     } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ في تشغيل الصوت.');
       setIsSpeaking(false);
     }
   };
@@ -233,7 +213,6 @@ export default function AIChatScreen() {
         <TouchableOpacity
           style={[styles.speakButton, { backgroundColor: dynamicColors.primary + '20' }]}
           onPress={() => handleSpeak(item.text)}
-          disabled={isSpeaking}
         >
           <MaterialCommunityIcons
             name={isSpeaking ? 'volume-high' : 'volume-medium'}
@@ -249,7 +228,7 @@ export default function AIChatScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen
         options={{
-          title: 'الدردشة مع المساعد الذكي',
+          title: 'رفيقك الذكي (ChatGPT)',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: dynamicColors.backgroundLight },
           headerShadowVisible: false,
@@ -262,53 +241,54 @@ export default function AIChatScreen() {
         }}
       />
 
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesList}
-        scrollEnabled={true}
-        onContentSizeChange={() => scrollToBottom()}
-        scrollEventThrottle={16}
-      />
-
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        style={styles.inputContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        style={{ flex: 1 }}
       >
-        <View style={[styles.inputWrapper, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-          <TouchableOpacity
-            style={styles.imageButton}
-            onPress={handlePickImage}
-            disabled={isLoading}
-          >
-            <MaterialCommunityIcons name="image-plus" size={24} color={dynamicColors.primary} />
-          </TouchableOpacity>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messagesList}
+          onContentSizeChange={() => scrollToBottom()}
+          scrollEventThrottle={16}
+        />
 
-          <TextInput
-            style={[styles.input, { color: dynamicColors.textDark }]}
-            placeholder="اكتب رسالتك هنا..."
-            placeholderTextColor={dynamicColors.textMuted}
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={500}
-            editable={!isLoading}
-          />
+        <View style={[styles.inputContainer, { backgroundColor: dynamicColors.backgroundLight }]}>
+          <View style={[styles.inputWrapper, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
+            <TouchableOpacity
+              style={styles.imageButton}
+              onPress={handlePickImage}
+              disabled={isLoading}
+            >
+              <MaterialCommunityIcons name="image-plus" size={24} color={dynamicColors.primary} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: dynamicColors.primary }]}
-            onPress={handleSendMessage}
-            disabled={isLoading || !inputText.trim()}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={dynamicColors.textLight} />
-            ) : (
-              <MaterialCommunityIcons name="send" size={20} color={dynamicColors.textLight} />
-            )}
-          </TouchableOpacity>
+            <TextInput
+              style={[styles.input, { color: dynamicColors.textDark }]}
+              placeholder="اكتب رسالتك هنا..."
+              placeholderTextColor={dynamicColors.textMuted}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
+              editable={!isLoading}
+            />
+
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: dynamicColors.primary }]}
+              onPress={handleSendMessage}
+              disabled={isLoading || !inputText.trim()}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color={dynamicColors.textLight} />
+              ) : (
+                <MaterialCommunityIcons name="send" size={20} color={dynamicColors.textLight} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -363,7 +343,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.base,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   inputWrapper: {
     flexDirection: 'row-reverse',
@@ -384,6 +364,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     marginHorizontal: SIZES.base,
     paddingVertical: SIZES.base,
+    textAlign: 'right',
   },
   sendButton: {
     width: 40,

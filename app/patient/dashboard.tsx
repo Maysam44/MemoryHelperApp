@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,30 +10,26 @@ import { SIZES, FONTS, COLORS } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
+// Function to get current date in Arabic
+const getArabicDate = () => {
+  const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  return new Intl.DateTimeFormat('ar-EG', options).format(new Date());
+};
+
 export default function PatientDashboard() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
   const [patientData, setPatientData] = useState<any>(null);
-  const [caregiverData, setCaregiverData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentDate, setCurrentDate] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
 
   useEffect(() => {
-    const updateDateTime = () => {
-      const now = new Date();
-      const dateOptions: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-      const timeOptions: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
-      setCurrentDate(now.toLocaleDateString('ar-SA', dateOptions));
-      setCurrentTime(now.toLocaleTimeString('ar-SA', timeOptions));
-    };
-    updateDateTime();
-    const interval = setInterval(updateDateTime, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    // Update time every minute
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
+    }, 60000);
 
-  useEffect(() => {
-    const fetchPatientAndCaregiverData = async () => {
+    const fetchPatientData = async () => {
       try {
         const user = auth.currentUser;
         if (user) {
@@ -43,116 +39,123 @@ export default function PatientDashboard() {
           if (userDocSnap.exists()) {
             const data = userDocSnap.data();
             setPatientData(data.patient);
-            setCaregiverData({ name: data.name, profileImage: data.profileImage });
           }
         }
       } catch (error) {
-        console.error("Error fetching patient/caregiver data:", error);
+        console.error("Error fetching patient data:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchPatientAndCaregiverData();
+    fetchPatientData();
+    return () => clearInterval(timer);
   }, []);
+
+  const handleLongPressLogo = () => {
+    Alert.alert(
+      "العودة لوضع مقدم الرعاية",
+      "هل أنت متأكد أنك تريد الخروج من وضع المريض؟",
+      [
+        { text: "إلغاء", style: "cancel" },
+        { text: "نعم، عودة", onPress: () => router.replace('/caregiver/dashboard') }
+      ]
+    );
+  };
 
   if (isLoading) {
     return (
       <View style={[styles.centered, { backgroundColor: dynamicColors.backgroundLight }]}>
         <ActivityIndicator size="large" color={dynamicColors.primary} />
+        <Text style={{ marginTop: 20, color: dynamicColors.textMuted, fontSize: SIZES.body }}>نجهز لك عالمك الجميل...</Text>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
-      <Stack.Screen options={{
-        headerShown: false,
-      }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Header with Logo and App Name (Now at the Top) */}
+      <View style={styles.topHeader}>
+        <View style={styles.headerContent}>
+          <View style={styles.appNameContainer}>
+            <Text style={[styles.appNamePart1, { color: COLORS.secondary }]}>رفيق</Text>
+            <Text style={[styles.appNamePart2, { color: COLORS.primary }]}>الذاكرة</Text>
+          </View>
+          <TouchableOpacity 
+            delayLongPress={2000}
+            onLongPress={handleLongPressLogo}
+            activeOpacity={0.8} 
+            style={styles.logoContainer}
+          >
+            <Image 
+              source={require('../images/logo.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Reality Orientation Header (Now Below the Logo) */}
+      <View style={[styles.realityHeader, { backgroundColor: dynamicColors.primary }]}>
+        <Text style={styles.dateText}>{getArabicDate()}</Text>
+        <Text style={styles.timeText}>الساعة الآن: {currentTime}</Text>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header Section with Logo and App Name */}
-        <View style={styles.headerSection}>
-          <View style={styles.logoAndNameWrapper}>
-            <Image source={require('../../app/images/logo.png')} style={styles.logo} />
-            <View style={styles.appNameContainer}>
-              <Text style={[styles.appNamePart1, { color: COLORS.secondary }]}>رفيق</Text>
-              <Text style={[styles.appNamePart2, { color: COLORS.primary }]}>الذاكرة</Text>
-            </View>
+        {/* Welcome Section */}
+        <View style={styles.welcomeSection}>
+          <View style={[styles.avatarContainer, { borderColor: dynamicColors.primary }]}>
+            <MaterialCommunityIcons name="account-heart" size={90} color={dynamicColors.primary} />
           </View>
-
-          {/* Date and Time Below Logo */}
-          <View style={styles.dateTimeContainer}>
-            <Text style={[styles.timeText, { color: dynamicColors.textMuted }]}>{currentTime}</Text>
-            <Text style={[styles.dateText, { color: dynamicColors.textMuted }]}>{currentDate}</Text>
-          </View>
+          <Text style={[styles.greeting, { color: dynamicColors.textDark }]}>
+            مرحباً بك، {patientData?.name || 'صديقي'}!
+          </Text>
+          <Text style={[styles.subGreeting, { color: dynamicColors.textMuted }]}>
+            نحن سعداء جداً برؤيتك اليوم.
+          </Text>
         </View>
 
-        {/* Caregiver Info Card */}
-        <View style={[styles.caregiverCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-          <View style={styles.caregiverContent}>
-            <View style={styles.caregiverTextWrapper}>
-              <Text style={[styles.caregiverLabel, { color: dynamicColors.textMuted }]}>مقدم الرعاية</Text>
-              <Text style={[styles.caregiverName, { color: dynamicColors.textDark }]}>{caregiverData?.name || 'غير معروف'}</Text>
-            </View>
-            {caregiverData?.profileImage ? (
-              <Image source={{ uri: caregiverData.profileImage }} style={styles.caregiverImage} />
-            ) : (
-              <View style={[styles.caregiverImagePlaceholder, { backgroundColor: dynamicColors.backgroundLight }]}>
-                <MaterialCommunityIcons name="account-circle-outline" size={40} color={dynamicColors.textMuted} />
-              </View>
-            )}
+        {/* Main Action Card */}
+        <TouchableOpacity 
+          style={[styles.mainCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}
+          onPress={() => router.push('/patient/memory-bank')}
+          activeOpacity={0.9}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: dynamicColors.primary + '15' }]}>
+            <MaterialCommunityIcons name="brain" size={60} color={dynamicColors.primary} />
           </View>
-        </View>
-
-        {/* Patient Info Card */}
-        <View style={[styles.infoCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <MaterialCommunityIcons name="cake-variant" size={24} color={dynamicColors.primary} />
-              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>العمر</Text>
-              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>{patientData?.age || 'غير محدد'}</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <MaterialCommunityIcons name="chart-line" size={24} color={dynamicColors.secondary} />
-              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>المرحلة</Text>
-              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>
-                {patientData?.stage === 'early' ? 'مبكرة' : patientData?.stage === 'moderate' ? 'متوسطة' : 'متأخرة'}
-              </Text>
-            </View>
+          <Text style={[styles.cardTitle, { color: dynamicColors.textDark }]}>بنك الذكريات</Text>
+          <Text style={[styles.cardSubtitle, { color: dynamicColors.textMuted }]}>
+            اضغط هنا لرؤية صور وأسماء أحبائك وأصدقائك الذين يشتاقون إليك.
+          </Text>
+          <View style={[styles.actionButton, { backgroundColor: dynamicColors.primary }]}>
+            <Text style={styles.actionButtonText}>استعراض الذكريات</Text>
+            <MaterialCommunityIcons name="chevron-left" size={28} color={COLORS.textLight} />
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Greeting */}
-        <Text style={[styles.greeting, { color: dynamicColors.textDark }]}>
-          مرحباً بك، {patientData?.name || 'المريض'}! 👋
-        </Text>
-
-        {/* Features Grid */}
-        <View style={styles.featuresGrid}>
-          <TouchableOpacity 
-            style={[styles.featureButton, { backgroundColor: dynamicColors.primary }]} 
-            onPress={() => router.push('/patient/memory-bank')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.featureIconWrapper}>
-              <MaterialCommunityIcons name="brain" size={32} color={dynamicColors.textLight} />
-            </View>
-            <Text style={[styles.featureTitle, { color: dynamicColors.textLight }]}>بنك الذكريات</Text>
-            <Text style={[styles.featureSubtitle, { color: dynamicColors.textLight }]}>استرجع ذكرياتك</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.featureButton, { backgroundColor: dynamicColors.secondary }]} 
-            onPress={() => router.push('/patient/ai-chat')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.featureIconWrapper}>
-              <MaterialCommunityIcons name="chat-outline" size={32} color={dynamicColors.textLight} />
-            </View>
-            <Text style={[styles.featureTitle, { color: dynamicColors.textLight }]}>المساعد الذكي</Text>
-            <Text style={[styles.featureSubtitle, { color: dynamicColors.textLight }]}>تحدث معي</Text>
-          </TouchableOpacity>
+        {/* Tip Section */}
+        <View style={[styles.infoCard, { backgroundColor: '#FFF9C4', borderColor: '#FBC02D' }]}>
+          <MaterialCommunityIcons name="lightbulb-on-outline" size={30} color="#F9A825" />
+          <Text style={[styles.infoText, { color: '#5D4037' }]}>
+            نصيحة: تصفح الصور يومياً يساعدك على تذكر أجمل اللحظات.
+          </Text>
         </View>
       </ScrollView>
+
+      {/* Floating AI Chat Button */}
+      <TouchableOpacity 
+        style={[styles.fab, { backgroundColor: COLORS.secondary }]}
+        onPress={() => router.push('/patient/ai-chat')}
+        activeOpacity={0.8}
+      >
+        <MaterialCommunityIcons name="chat-processing" size={32} color="white" />
+        <View style={styles.fabBadge}>
+          <Text style={styles.fabBadgeText}>AI</Text>
+        </View>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -160,161 +163,181 @@ export default function PatientDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { 
-    paddingHorizontal: SIZES.padding,
-    paddingTop: SIZES.padding,
-    paddingBottom: SIZES.padding * 3,
-    alignItems: 'center',
-  },
-  
-  /* Header Section */
-  headerSection: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: SIZES.padding * 2.5,
-  },
-  logoAndNameWrapper: {
-    flexDirection: 'row-reverse',
+  realityHeader: {
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SIZES.padding,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
   },
-  logo: {
-    width: 60,
-    height: 60,
-    marginLeft: SIZES.base,
+  dateText: {
+    color: 'white',
+    fontSize: SIZES.body,
+    fontWeight: FONTS.bold,
+  },
+  timeText: {
+    color: 'white',
+    fontSize: SIZES.caption,
+    marginTop: 2,
+  },
+  topHeader: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    backgroundColor: 'white',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   appNameContainer: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
   },
   appNamePart1: {
-    fontSize: SIZES.h1,
-    fontWeight: FONTS.bold,
-    marginRight: SIZES.base,
-  },
-  appNamePart2: {
-    fontSize: SIZES.h1,
-    fontWeight: FONTS.bold,
-  },
-  dateTimeContainer: {
-    alignItems: 'center',
-  },
-  dateText: {
-    fontSize: SIZES.caption,
-    fontWeight: FONTS.medium,
-    marginTop: SIZES.base / 2,
-  },
-  timeText: {
-    fontSize: SIZES.h3,
-    fontWeight: FONTS.bold,
-  },
-
-  /* Caregiver Card */
-  caregiverCard: {
-    width: '100%',
-    padding: SIZES.padding,
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-    marginBottom: SIZES.padding * 1.5,
-  },
-  caregiverContent: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  caregiverTextWrapper: {
-    flex: 1,
-    marginRight: SIZES.padding,
-  },
-  caregiverLabel: {
-    fontSize: SIZES.caption,
-    fontWeight: FONTS.medium,
-    marginBottom: SIZES.base / 2,
-  },
-  caregiverName: {
-    fontSize: SIZES.h3,
-    fontWeight: FONTS.bold,
-  },
-  caregiverImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  caregiverImagePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* Info Card */
-  infoCard: {
-    width: '100%',
-    padding: SIZES.padding,
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-    marginBottom: SIZES.padding * 2,
-  },
-  infoRow: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-around',
-  },
-  infoItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: SIZES.caption,
-    fontWeight: FONTS.medium,
-    marginTop: SIZES.base / 2,
-  },
-  infoValue: {
-    fontSize: SIZES.h3,
-    fontWeight: FONTS.bold,
-    marginTop: SIZES.base / 2,
-  },
-
-  /* Greeting */
-  greeting: {
     fontSize: SIZES.h2,
     fontWeight: FONTS.bold,
-    marginBottom: SIZES.padding * 2,
-    textAlign: 'center',
+    marginRight: 4,
   },
-
-  /* Features Grid */
-  featuresGrid: {
+  appNamePart2: {
+    fontSize: SIZES.h2,
+    fontWeight: FONTS.bold,
+  },
+  logoContainer: {
+    width: 60,
+    height: 60,
+  },
+  logo: {
     width: '100%',
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    gap: SIZES.padding,
+    height: '100%',
   },
-  featureButton: {
-    flex: 1,
-    paddingVertical: SIZES.padding * 1.5,
-    paddingHorizontal: SIZES.padding,
-    borderRadius: SIZES.radius,
+  scrollContent: { 
+    padding: SIZES.padding, 
     alignItems: 'center',
+    paddingBottom: 100,
+  },
+  welcomeSection: {
+    alignItems: 'center',
+    marginVertical: SIZES.padding,
+  },
+  avatarContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'white',
     justifyContent: 'center',
-    elevation: 3,
+    alignItems: 'center',
+    marginBottom: SIZES.base,
+    elevation: 4,
+    borderWidth: 2,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
   },
-  featureIconWrapper: {
+  greeting: {
+    fontSize: SIZES.h1,
+    fontWeight: FONTS.bold,
+    textAlign: 'center',
+  },
+  subGreeting: {
+    fontSize: SIZES.h3,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  mainCard: {
+    width: '100%',
+    padding: SIZES.padding * 1.5,
+    borderRadius: SIZES.radius * 2,
+    borderWidth: 1,
+    marginTop: SIZES.padding,
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  iconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SIZES.padding,
+  },
+  cardTitle: {
+    fontSize: SIZES.h1,
+    fontWeight: FONTS.bold,
     marginBottom: SIZES.base,
   },
-  featureTitle: {
-    fontSize: SIZES.h3,
+  cardSubtitle: {
+    fontSize: SIZES.body,
+    textAlign: 'center',
+    marginBottom: SIZES.padding * 1.5,
+    lineHeight: 28,
+  },
+  actionButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding * 2,
+    paddingVertical: SIZES.padding,
+    borderRadius: SIZES.radius,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: SIZES.h2,
     fontWeight: FONTS.bold,
-    marginBottom: SIZES.base / 2,
+    marginLeft: 10,
   },
-  featureSubtitle: {
-    fontSize: SIZES.caption,
+  infoCard: {
+    width: '100%',
+    flexDirection: 'row-reverse',
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
+    marginTop: SIZES.padding * 2,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: SIZES.body,
+    marginRight: 12,
+    textAlign: 'right',
     fontWeight: FONTS.medium,
-    opacity: 0.9,
   },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  fabBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  fabBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  }
 });
