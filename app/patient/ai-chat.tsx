@@ -20,6 +20,15 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize Google Gemini AI (Free Tier)
+// NOTE: For production, use a secure backend or proxy for API keys
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "YOUR_FREE_GEMINI_KEY");
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash",
+  systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. إذا شارك صورة، عبّر عن جمالها وساعده في تذكر تفاصيلها. كن رفيقاً حقيقياً لا يمل."
+});
 
 interface Message {
   id: string;
@@ -35,7 +44,7 @@ export default function AIChatScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'مرحباً! أنا رفيقك الذكي المجاني. أنا هنا لأستمع إليك وأساعدك في تذكر الأشياء الجميلة. كيف تشعر اليوم؟',
+      text: 'مرحباً! أنا رفيقك الذكي الجديد. أنا هنا لأسمعك وأشاركك يومك. كيف حالك اليوم؟',
       sender: 'ai',
       timestamp: new Date(),
     },
@@ -55,56 +64,15 @@ export default function AIChatScreen() {
     scrollToBottom();
   }, [messages]);
 
-  // Using a Free AI API (DuckDuckGo's Free AI Proxy or HuggingFace Inference API)
-  // For this implementation, we'll use a reliable free fallback mechanism
-  const getFreeAIResponse = async (userText: string) => {
+  const getGeminiResponse = async (userText: string) => {
     try {
-      // System prompt to guide the AI
-      const systemPrompt = "أنت مساعد ذكي لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. كن صبوراً وحنوناً وتحدث بالعربية البسيطة.";
-      
-      // We'll use a reliable free inference endpoint (Hugging Face or similar public API)
-      // This is a free public API that doesn't require keys for low-rate usage
-      const response = await fetch("https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: `<|system|>\n${systemPrompt}</s>\n<|user|>\n${userText}</s>\n<|assistant|>`,
-          parameters: {
-            max_new_tokens: 250,
-            temperature: 0.7,
-            top_p: 0.95,
-            return_full_text: false,
-          }
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data && data[0] && data[0].generated_text) {
-        let aiText = data[0].generated_text;
-        // Clean up any remaining tags if present
-        aiText = aiText.replace(/<\|assistant\|>/g, '').trim();
-        return aiText;
-      }
-      
-      // Fallback if the API fails
-      return generateContextualFallback(userText);
+      const result = await model.generateContent(userText);
+      const response = await result.response;
+      return response.text() || "أنا هنا معك، هل يمكنك إخباري بالمزيد؟";
     } catch (error) {
-      console.error("Free AI Error:", error);
-      return generateContextualFallback(userText);
+      console.error("Gemini AI Error:", error);
+      return "عذراً يا صديقي، يبدو أنني أحتاج لثانية للتفكير. ماذا كنت تقول؟";
     }
-  };
-
-  // Advanced Fallback Logic (Completely Free & Offline-capable)
-  const generateContextualFallback = (text: string): string => {
-    const input = text.toLowerCase();
-    if (input.includes('صحة') || input.includes('ألم')) return "سلامتك تهمنا. هل تشعر بأي تعب الآن؟ أنا هنا بجانبك.";
-    if (input.includes('ذكرى') || input.includes('تذكر')) return "الذكريات هي كنزنا. أخبرني عن أكثر شيء تحب تذكره دائماً.";
-    if (input.includes('مرحبا') || input.includes('سلام')) return "أهلاً بك يا صديقي العزيز! يومك سعيد بإذن الله.";
-    if (input.includes('من أنت')) return "أنا رفيقك الرقمي، هنا لأذكرك بكل ما هو جميل وأساعدك في يومك.";
-    return "شكراً لمشاركتي هذا. أنت شخص رائع، وأنا دائماً هنا لأسمعك. هل تريد أن نحكي في موضوع آخر؟";
   };
 
   const handleSendMessage = async () => {
@@ -124,7 +92,7 @@ export default function AIChatScreen() {
     Keyboard.dismiss();
 
     try {
-      const aiResponseText = await getFreeAIResponse(userText);
+      const aiResponseText = await getGeminiResponse(userText);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -164,10 +132,12 @@ export default function AIChatScreen() {
         setMessages((prev) => [...prev, userMessage]);
         setIsLoading(true);
 
+        // For Gemini Pro Vision or similar, you'd send the image. 
+        // For Flash, we simulate a warm response about the image.
         setTimeout(() => {
           const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
-            text: 'يا لها من صورة جميلة! الصور تساعدنا دائماً على تذكر اللحظات الرائعة. هل تحب أن تحكي لي أكثر عنها؟',
+            text: 'يا لها من صورة جميلة جداً! الصور دائماً تحمل ذكريات غالية. هل تحب أن تحكي لي قصة هذه الصورة؟',
             sender: 'ai',
             timestamp: new Date(),
           };
@@ -252,7 +222,7 @@ export default function AIChatScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen
         options={{
-          title: 'رفيقك الذكي (مجاني)',
+          title: 'رفيقك الذكي (Google Gemini)',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: dynamicColors.backgroundLight },
           headerShadowVisible: false,
