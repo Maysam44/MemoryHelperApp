@@ -20,7 +20,7 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
