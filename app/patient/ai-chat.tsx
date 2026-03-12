@@ -20,14 +20,6 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-// Initialize Google Gemini AI (Free Tier with provided API key)
-const genAI = new GoogleGenerativeAI("AIzaSyCs0Y4neLgnW5tvGWP8o0SArmaWMC84Euk");
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash",
-  systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. إذا شارك صورة، عبّر عن جمالها وساعده في تذكر تفاصيلها. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر."
-});
 
 interface Message {
   id: string;
@@ -36,6 +28,10 @@ interface Message {
   timestamp: Date;
   imageUri?: string;
 }
+
+// Gemini API Configuration (Direct Fetch)
+const GEMINI_API_KEY = "AIzaSyCs0Y4neLgnW5tvGWP8o0SArmaWMC84Euk";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -63,33 +59,105 @@ export default function AIChatScreen() {
     scrollToBottom();
   }, [messages]);
 
-  // Get response from Gemini AI with error handling
+  // Direct Fetch API call to Gemini (Most Reliable Method)
   const getGeminiResponse = async (userText: string): Promise<string> => {
     try {
-      const result = await model.generateContent(userText);
-      const response = await result.response;
-      const text = response.text();
-      
-      if (!text || text.trim().length === 0) {
-        return "أنا هنا معك. هل يمكنك إخباري بالمزيد؟";
+      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: userText,
+                }
+              ]
+            }
+          ],
+          systemInstruction: {
+            parts: [
+              {
+                text: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. إذا شارك صورة، عبّر عن جمالها وساعده في تذكر تفاصيلها. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب."
+              }
+            ]
+          },
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 500,
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Gemini API Error:', response.status, response.statusText);
+        throw new Error(`API Error: ${response.status}`);
       }
+
+      const data = await response.json();
       
-      return text;
+      // Extract text from Gemini response
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+        const text = data.candidates[0].content.parts[0].text;
+        if (text && text.trim().length > 0) {
+          return text;
+        }
+      }
+
+      // Fallback if response is empty
+      return "أنا هنا معك. هل يمكنك إخباري بالمزيد؟";
     } catch (error: any) {
-      console.error("Gemini API Error:", error);
+      console.error("Gemini API Error Details:", error);
       
-      // Fallback to smart contextual responses if API fails
+      // Smart Fallback Responses (Arabic Optimized)
       const userLower = userText.toLowerCase();
       
       if (userLower.includes('هاي') || userLower.includes('مرحبا') || userLower.includes('سلام')) {
-        return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك.";
+        return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك؟";
       }
       
-      if (userLower.includes('تعب') || userLower.includes('وجع') || userLower.includes('ألم')) {
-        return "أنا آسف لسماع أنك لا تشعر بخير. أنا هنا بجانبك.";
+      if (userLower.includes('ما اليوم') || userLower.includes('شو اليوم') || userLower.includes('تاريخ')) {
+        const now = new Date();
+        const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const dateStr = new Intl.DateTimeFormat('ar-EG', options).format(now);
+        return `اليوم هو ${dateStr}. إنه يوم جميل لنصنع فيه ذكريات جديدة.`;
       }
+
+      if (userLower.includes('وقت') || userLower.includes('ساعة') || userLower.includes('كم الساعة')) {
+        const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        return `الساعة الآن هي ${timeStr}. هل هناك شيء تود فعله في هذا الوقت؟`;
+      }
+
+      if (userLower.includes('تعب') || userLower.includes('وجع') || userLower.includes('ألم') || userLower.includes('مريض')) {
+        return "أنا آسف لسماع أنك لا تشعر بخير. هل تريد أن نتصل بمقدم الرعاية الخاص بك؟ أنا هنا بجانبك.";
+      }
+
+      if (userLower.includes('مين انت') || userLower.includes('شو بتعمل')) {
+        return "أنا رفيقك الذكي في تطبيق 'رفيق الذاكرة'. وظيفتي هي أن أكون معك دائماً، أذكرك بالأشياء الجميلة وأسمع قصصك الرائعة.";
+      }
+
+      if (userLower.includes('نسيت') || userLower.includes('مش متذكر') || userLower.includes('ذكرني')) {
+        return "لا تقلق أبداً، النسيان أمر طبيعي. يمكنك دائماً تصفح 'بنك الذكريات' لرؤية صور أحبائك. هل تريدني أن أساعدك في العثور على شيء معين؟";
+      }
+
+      if (userLower.includes('بحبك') || userLower.includes('شكرا') || userLower.includes('حلو')) {
+        return "هذا من لطفك وجمال قلبك! أنا أيضاً سعيد جداً بوجودي معك. أنت شخص رائع جداً.";
+      }
+
+      // Generic warm responses
+      const genericResponses = [
+        "هذا موضوع شيق جداً! أخبرني المزيد عن ذلك، أنا أصغي إليك باهتمام.",
+        "أفهمك تماماً. الحياة مليئة بالقصص الجميلة، وأنا أحب سماع كل ما تقوله.",
+        "شكراً لمشاركتي هذه الكلمات. هل تذكر شيئاً مشابهاً حدث لك في الماضي؟",
+        "كلامك يبعث على التفاؤل. أنت دائماً ما تلهمنا بحديثك. ماذا أيضاً؟",
+        "أنا أتعلم منك الكثير في كل مرة نتحدث فيها. هل تريد أن نحكي عن عائلتك أو أصدقائك؟"
+      ];
       
-      return "أنا هنا معك، هل يمكنك إعادة ما قلته؟";
+      return genericResponses[Math.floor(Math.random() * genericResponses.length)];
     }
   };
 
