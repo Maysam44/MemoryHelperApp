@@ -20,6 +20,14 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize Google Gemini AI (Free Tier with provided API key)
+const genAI = new GoogleGenerativeAI("AIzaSyCs0Y4neLgnW5tvGWP8o0SArmaWMC84Euk");
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash",
+  systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. إذا شارك صورة، عبّر عن جمالها وساعده في تذكر تفاصيلها. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر."
+});
 
 interface Message {
   id: string;
@@ -55,55 +63,34 @@ export default function AIChatScreen() {
     scrollToBottom();
   }, [messages]);
 
-  // --- SMART HYBRID AI ENGINE (Arabic Optimized) ---
-  const getSmartAIResponse = async (userText: string): Promise<string> => {
-    const text = userText.trim().toLowerCase();
-    
-    // 1. Contextual Intent Detection (Arabic)
-    if (text.includes('هاي') || text.includes('مرحبا') || text.includes('سلام')) {
-      return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف كان يومك حتى الآن؟";
+  // Get response from Gemini AI with error handling
+  const getGeminiResponse = async (userText: string): Promise<string> => {
+    try {
+      const result = await model.generateContent(userText);
+      const response = await result.response;
+      const text = response.text();
+      
+      if (!text || text.trim().length === 0) {
+        return "أنا هنا معك. هل يمكنك إخباري بالمزيد؟";
+      }
+      
+      return text;
+    } catch (error: any) {
+      console.error("Gemini API Error:", error);
+      
+      // Fallback to smart contextual responses if API fails
+      const userLower = userText.toLowerCase();
+      
+      if (userLower.includes('هاي') || userLower.includes('مرحبا') || userLower.includes('سلام')) {
+        return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك.";
+      }
+      
+      if (userLower.includes('تعب') || userLower.includes('وجع') || userLower.includes('ألم')) {
+        return "أنا آسف لسماع أنك لا تشعر بخير. أنا هنا بجانبك.";
+      }
+      
+      return "أنا هنا معك، هل يمكنك إعادة ما قلته؟";
     }
-    
-    if (text.includes('ما اليوم') || text.includes('شو اليوم') || text.includes('تاريخ')) {
-      const now = new Date();
-      const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-      const dateStr = new Intl.DateTimeFormat('ar-EG', options).format(now);
-      return `اليوم هو ${dateStr}. إنه يوم جميل لنصنع فيه ذكريات جديدة، أليس كذلك؟`;
-    }
-
-    if (text.includes('وقت') || text.includes('ساعة') || text.includes('كم الساعة')) {
-      const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-      return `الساعة الآن هي ${timeStr}. هل هناك شيء تود فعله في هذا الوقت؟`;
-    }
-
-    if (text.includes('تعب') || text.includes('وجع') || text.includes('ألم') || text.includes('مريض')) {
-      return "أنا آسف لسماع أنك لا تشعر بخير. هل تريد أن نتصل بمقدم الرعاية الخاص بك؟ أنا هنا بجانبك ولن أتركك.";
-    }
-
-    if (text.includes('مين انت') || text.includes('شو بتعمل')) {
-      return "أنا رفيقك الذكي في تطبيق 'رفيق الذاكرة'. وظيفتي هي أن أكون معك دائماً، أذكرك بالأشياء الجميلة وأسمع قصصك الرائعة.";
-    }
-
-    if (text.includes('نسيت') || text.includes('مش متذكر') || text.includes('ذكرني')) {
-      return "لا تقلق أبداً، النسيان أمر طبيعي. يمكنك دائماً تصفح 'بنك الذكريات' لرؤية صور أحبائك. هل تريدني أن أساعدك في العثور على شيء معين؟";
-    }
-
-    if (text.includes('بحبك') || text.includes('شكرا') || text.includes('حلو')) {
-      return "هذا من لطفك وجمال قلبك! أنا أيضاً سعيد جداً بوجودي معك. أنت شخص رائع.";
-    }
-
-    // 2. Dynamic Free Web Fallback (Simulated Intelligence)
-    // If no specific intent, provide a warm, general response that encourages conversation
-    const genericResponses = [
-      "هذا موضوع شيق جداً! أخبرني المزيد عن ذلك، أنا أصغي إليك باهتمام.",
-      "أفهمك تماماً. الحياة مليئة بالقصص الجميلة، وأنا أحب سماع كل ما تقوله.",
-      "شكراً لمشاركتي هذه الكلمات. هل تذكر شيئاً مشابهاً حدث لك في الماضي؟",
-      "كلامك يبعث على التفاؤل. أنت دائماً ما تلهمنا بحديثك. ماذا أيضاً؟",
-      "أنا أتعلم منك الكثير في كل مرة نتحدث فيها. هل تريد أن نحكي عن عائلتك أو أصدقائك؟"
-    ];
-    
-    const randomIndex = Math.floor(Math.random() * genericResponses.length);
-    return genericResponses[randomIndex];
   };
 
   const handleSendMessage = async () => {
@@ -123,8 +110,7 @@ export default function AIChatScreen() {
     Keyboard.dismiss();
 
     try {
-      // Use the Smart Hybrid Engine (Works instantly, free, and understands context)
-      const aiResponseText = await getSmartAIResponse(userText);
+      const aiResponseText = await getGeminiResponse(userText);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -133,15 +119,11 @@ export default function AIChatScreen() {
         timestamp: new Date(),
       };
 
-      // Small delay for natural feeling
-      setTimeout(() => {
-        setMessages((prev) => [...prev, aiMessage]);
-        setIsLoading(false);
-      }, 600);
-      
+      setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
+      Alert.alert('تنبيه', 'أواجه مشكلة بسيطة في الاتصال، لكنني ما زلت معك.');
+    } finally {
       setIsLoading(false);
-      Alert.alert('تنبيه', 'أنا هنا معك، هل يمكنك إعادة ما قلته؟');
     }
   };
 
@@ -256,7 +238,7 @@ export default function AIChatScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen
         options={{
-          title: 'رفيقك الذكي',
+          title: 'رفيقك الذكي (Google Gemini)',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: dynamicColors.backgroundLight },
           headerShadowVisible: false,
