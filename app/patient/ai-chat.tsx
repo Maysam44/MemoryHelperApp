@@ -20,6 +20,8 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import Constants from 'expo-constants';
+
 interface Message {
   id: string;
   text: string;
@@ -30,7 +32,7 @@ interface Message {
 
 // Gemini API Configuration (Direct Fetch)
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey;
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -60,6 +62,11 @@ export default function AIChatScreen() {
 
   // Direct Fetch API call to Gemini (Most Reliable Method)
   const getGeminiResponse = async (userText: string): Promise<string> => {
+    if (!GEMINI_API_KEY) {
+      console.warn("Gemini API Key is missing. Using fallback responses.");
+      return getFallbackResponse(userText);
+    }
+
     try {
       const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -94,7 +101,7 @@ export default function AIChatScreen() {
 
       if (!response.ok) {
         console.error('Gemini API Error:', response.status, response.statusText);
-        throw new Error(`API Error: ${response.status}`);
+        return getFallbackResponse(userText);
       }
 
       const data = await response.json();
@@ -107,12 +114,14 @@ export default function AIChatScreen() {
         }
       }
 
-      // Fallback if response is empty
-      return "أنا هنا معك. هل يمكنك إخباري بالمزيد؟";
+      return getFallbackResponse(userText);
     } catch (error: any) {
       console.error("Gemini API Error Details:", error);
-      
-      // Smart Fallback Responses (Arabic Optimized)
+      return getFallbackResponse(userText);
+    }
+  };
+
+  const getFallbackResponse = (userText: string): string => {
       const userLower = userText.toLowerCase();
       
       if (userLower.includes('هاي') || userLower.includes('مرحبا') || userLower.includes('سلام')) {
@@ -147,7 +156,6 @@ export default function AIChatScreen() {
         return "هذا من لطفك وجمال قلبك! أنا أيضاً سعيد جداً بوجودي معك. أنت شخص رائع جداً.";
       }
 
-      // Generic warm responses
       const genericResponses = [
         "هذا موضوع شيق جداً! أخبرني المزيد عن ذلك، أنا أصغي إليك باهتمام.",
         "أفهمك تماماً. الحياة مليئة بالقصص الجميلة، وأنا أحب سماع كل ما تقوله.",
@@ -157,7 +165,6 @@ export default function AIChatScreen() {
       ];
       
       return genericResponses[Math.floor(Math.random() * genericResponses.length)];
-    }
   };
 
   const handleSendMessage = async () => {
@@ -305,67 +312,65 @@ export default function AIChatScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen
         options={{
-          title: 'رفيقك الذكي (Google Gemini)',
+          title: 'رفيقك الذكي',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: dynamicColors.backgroundLight },
           headerShadowVisible: false,
-          headerTitleStyle: { color: dynamicColors.textDark, fontSize: SIZES.h3 },
+          headerTitleStyle: { color: dynamicColors.textDark, fontSize: SIZES.h3, fontWeight: 'bold' },
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: SIZES.padding }}>
-              <MaterialCommunityIcons name="chevron-right" size={28} color={dynamicColors.textDark} />
+              <MaterialCommunityIcons name="chevron-right" size={30} color={dynamicColors.textDark} />
             </TouchableOpacity>
           ),
         }}
       />
-
+      
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
+        keyboardVerticalOffset={90}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
-          renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => scrollToBottom()}
-          scrollEventThrottle={16}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
         />
 
-        <View style={[styles.inputContainer, { backgroundColor: dynamicColors.backgroundLight }]}>
-          <View style={[styles.inputWrapper, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-            <TouchableOpacity
-              style={styles.imageButton}
-              onPress={handlePickImage}
-              disabled={isLoading}
-            >
-              <MaterialCommunityIcons name="image-plus" size={24} color={dynamicColors.primary} />
-            </TouchableOpacity>
-
-            <TextInput
-              style={[styles.input, { color: dynamicColors.textDark }]}
-              placeholder="اكتب رسالتك هنا..."
-              placeholderTextColor={dynamicColors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={500}
-              editable={!isLoading}
-            />
-
-            <TouchableOpacity
-              style={[styles.sendButton, { backgroundColor: dynamicColors.primary }]}
-              onPress={handleSendMessage}
-              disabled={isLoading || !inputText.trim()}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={dynamicColors.textLight} />
-              ) : (
-                <MaterialCommunityIcons name="send" size={20} color={dynamicColors.textLight} />
-              )}
-            </TouchableOpacity>
+        {isLoading && (
+          <View style={styles.loadingIndicator}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={{ marginRight: 10, color: COLORS.textMuted }}>الرفيق الذكي يفكر...</Text>
           </View>
+        )}
+
+        <View style={[styles.inputContainer, { backgroundColor: dynamicColors.card, borderTopColor: dynamicColors.border }]}>
+          <TouchableOpacity 
+            style={[styles.attachButton, { backgroundColor: dynamicColors.primary + '15' }]} 
+            onPress={handlePickImage}
+          >
+            <MaterialCommunityIcons name="image-plus" size={24} color={dynamicColors.primary} />
+          </TouchableOpacity>
+          
+          <TextInput
+            style={[styles.input, { backgroundColor: dynamicColors.backgroundLight, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
+            placeholder="اكتب رسالتك هنا..."
+            placeholderTextColor={dynamicColors.textMuted}
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            textAlign="right"
+          />
+
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: inputText.trim() ? dynamicColors.primary : COLORS.textMuted }]}
+            onPress={handleSendMessage}
+            disabled={!inputText.trim() || isLoading}
+          >
+            <MaterialCommunityIcons name="send" size={24} color="white" />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -374,80 +379,59 @@ export default function AIChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  messagesList: { 
-    paddingHorizontal: SIZES.padding,
-    paddingTop: SIZES.padding,
-    paddingBottom: SIZES.padding * 2,
-  },
-  messageContainer: {
-    marginBottom: SIZES.padding,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  userMessageContainer: {
-    justifyContent: 'flex-end',
-  },
-  aiMessageContainer: {
-    justifyContent: 'flex-start',
-  },
+  listContent: { padding: 20, paddingBottom: 10 },
+  messageContainer: { marginBottom: 20, maxWidth: '85%' },
+  userMessageContainer: { alignSelf: 'flex-start', alignItems: 'flex-start' },
+  aiMessageContainer: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   messageBubble: {
-    maxWidth: '80%',
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.base,
-    borderRadius: SIZES.radius,
-    overflow: 'hidden',
+    padding: 15,
+    borderRadius: 20,
+    elevation: 1,
   },
-  messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: SIZES.radius - 5,
-    marginBottom: SIZES.base,
-  },
-  messageText: {
-    fontSize: SIZES.body,
-    lineHeight: SIZES.body * 1.5,
-    fontWeight: FONTS.regular,
-  },
+  messageText: { fontSize: 16, lineHeight: 24, textAlign: 'right' },
+  messageImage: { width: 200, height: 150, borderRadius: 15, marginBottom: 10 },
   speakButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-end',
+  },
+  loadingIndicator: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    marginLeft: SIZES.base,
+    justifyContent: 'center',
+    padding: 10,
   },
   inputContainer: {
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.base,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-  },
-  inputWrapper: {
     flexDirection: 'row-reverse',
-    alignItems: 'flex-end',
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
-    minHeight: 50,
+    alignItems: 'center',
+    padding: 10,
+    borderTopWidth: 1,
   },
-  imageButton: {
-    padding: SIZES.base,
-    marginLeft: SIZES.base / 2,
+  attachButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   input: {
     flex: 1,
-    fontSize: SIZES.body,
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     maxHeight: 100,
-    marginHorizontal: SIZES.base,
-    paddingVertical: SIZES.base,
+    fontSize: 16,
+    borderWidth: 1,
     textAlign: 'right',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 45,
+    height: 45,
+    borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
   },
 });

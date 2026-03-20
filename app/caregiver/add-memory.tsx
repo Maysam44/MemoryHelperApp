@@ -5,10 +5,10 @@ import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { auth, db } from '../../firebaseConfig';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
-import { Audio } from 'expo-av'; // استيراد مكتبة الصوت
+import { Audio } from 'expo-av';
 
 export default function AddPersonScreen() {
   const router = useRouter();
@@ -45,7 +45,6 @@ export default function AddPersonScreen() {
     }
   };
 
-  // دالات التسجيل الصوتي
   async function startRecording() {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -89,14 +88,14 @@ export default function AddPersonScreen() {
       const user = auth.currentUser;
       if (user) {
         const personId = Date.now().toString();
-        // حفظ البيانات في المسار الصحيح الذي يقرأ منه المريض
-        await setDoc(doc(db, "families", user.uid, "people", personId), {
+        // توحيد المسار إلى users/{uid}/memoryBank ليتوافق مع لوحة التحكم والتعديل
+        await setDoc(doc(db, "users", user.uid, "memoryBank", personId), {
           id: personId,
           name,
-          relationship,
+          relation: relationship, // استخدام relation ليتوافق مع edit-memory
           description,
-          imageUrl: image,
-          audioUrl: recordingUri, // حفظ رابط الصوت
+          imageUri: image, // استخدام imageUri ليتوافق مع dashboard و edit-memory
+          audioUrl: recordingUri,
           createdAt: new Date().toISOString(),
         });
 
@@ -113,10 +112,10 @@ export default function AddPersonScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
+      <Stack.Screen options={{ title: 'إضافة شخص جديد', headerTitleAlign: 'center' }} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           
-          {/* اختيار الصورة */}
           <TouchableOpacity style={[styles.imageContainer, { borderColor: dynamicColors.border }]} onPress={pickImage}>
             {image ? (
               <Image source={{ uri: image }} style={styles.image} />
@@ -128,7 +127,6 @@ export default function AddPersonScreen() {
             )}
           </TouchableOpacity>
 
-          {/* المدخلات النصية */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: dynamicColors.textDark }]}>الاسم الكامل</Text>
             <TextInput
@@ -137,6 +135,7 @@ export default function AddPersonScreen() {
               onChangeText={setName}
               placeholder="مثال: أحمد محمد"
               placeholderTextColor={dynamicColors.textMuted}
+              textAlign="right"
             />
           </View>
 
@@ -148,6 +147,7 @@ export default function AddPersonScreen() {
               onChangeText={setRelationship}
               placeholder="مثال: الابن الأكبر"
               placeholderTextColor={dynamicColors.textMuted}
+              textAlign="right"
             />
           </View>
 
@@ -160,10 +160,10 @@ export default function AddPersonScreen() {
               placeholder="مثال: يحب لعب الشطرنج معك"
               placeholderTextColor={dynamicColors.textMuted}
               multiline
+              textAlign="right"
             />
           </View>
 
-          {/* قسم التسجيل الصوتي - الإضافة الجديدة */}
           <View style={[styles.audioSection, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
             <Text style={[styles.label, { color: dynamicColors.textDark, textAlign: 'center' }]}>سجل رسالة صوتية للمريض</Text>
             <View style={styles.audioButtonsRow}>
@@ -185,7 +185,6 @@ export default function AddPersonScreen() {
             {recordingUri && <Text style={styles.successText}>✓ تم تسجيل الصوت بنجاح</Text>}
           </View>
 
-          {/* زر الحفظ */}
           <TouchableOpacity 
             style={[styles.submitButton, { backgroundColor: COLORS.primary, opacity: isSubmitting ? 0.7 : 1 }]} 
             onPress={handleAddPerson}
@@ -195,7 +194,7 @@ export default function AddPersonScreen() {
               <ActivityIndicator color="white" />
             ) : (
               <>
-                <MaterialCommunityIcons name="check" size={24} color="white" />
+                <MaterialCommunityIcons name="check" size={24} color="white" style={{ marginLeft: 10 }} />
                 <Text style={styles.submitButtonText}>حفظ في بنك الذكريات</Text>
               </>
             )}
@@ -249,7 +248,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginHorizontal: 5,
   },
-  audioBtnText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
+  audioBtnText: { color: 'white', fontWeight: 'bold', marginRight: 8 },
   successText: { color: '#4CAF50', marginTop: 10, fontWeight: 'bold' },
   submitButton: {
     flexDirection: 'row-reverse',
@@ -259,5 +258,5 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginBottom: 40,
   },
-  submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold', marginLeft: 10 },
+  submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 });
