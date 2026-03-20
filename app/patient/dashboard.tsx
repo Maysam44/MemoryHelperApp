@@ -136,39 +136,7 @@ export default function PatientDashboard() {
           </View>
         </TouchableOpacity>
 
-<TouchableOpacity 
-  style={[styles.mainCard, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}
-  onPress={() => router.push('/patient/medicine-reminders')}
-  activeOpacity={0.9}
->
-  <View style={[styles.iconCircle, { backgroundColor: '#FF6B6B' + '15' }]}>
-    <MaterialCommunityIcons name="pill" size={60} color="#FF6B6B" />
-  </View>
-  <Text style={[styles.cardTitle, { color: dynamicColors.textDark }]}>تنبيهات الأدوية</Text>
-  <Text style={[styles.cardSubtitle, { color: dynamicColors.textMuted }]}>
-    تذكر بمواعيد الأدوية والجرعات المهمة.
-  </Text>
-</TouchableOpacity>
-
-{/* زر المناطق الآمنة */}
-<TouchableOpacity 
-  style={styles.mainCard}
-  onPress={() => router.push('/patient/safe-zones')}
->
-  <MaterialCommunityIcons name="map-marker-radius" size={40} color="#4CAF50" />
-  <Text>المناطق الآمنة</Text>
-</TouchableOpacity>
-
-{/* زر بنك الذكريات المطور (الذي يحتوي الآن على الصوت) */}
-<TouchableOpacity 
-  style={styles.mainCard}
-  onPress={() => router.push('/patient/memory-bank')}
->
-  <MaterialCommunityIcons name="microphone-variant" size={40} color="#2196F3" />
-  <Text>ذكرياتي الصوتية</Text>
-</TouchableOpacity>
-
-        {/* Tip Section */}
+       {/* Tip Section */}
         <View style={[styles.infoCard, { backgroundColor: '#FFF9C4', borderColor: '#FBC02D' }]}>
           <MaterialCommunityIcons name="lightbulb-on-outline" size={30} color="#F9A825" />
           <Text style={[styles.infoText, { color: '#5D4037' }]}>

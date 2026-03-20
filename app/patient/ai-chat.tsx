@@ -20,9 +20,6 @@ import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
-import Constants from 'expo-constants'; // استيراد Constants
-
-
 interface Message {
   id: string;
   text: string;
@@ -32,8 +29,8 @@ interface Message {
 }
 
 // Gemini API Configuration (Direct Fetch)
-const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey; // قراءة المفتاح من Constants
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
 
 export default function AIChatScreen() {
   const router = useRouter();
