@@ -1,12 +1,12 @@
+// app/layout.tsx
+
 import { Stack } from 'expo-router';
 import { ThemeProvider } from '../constants/ThemeContext';
 
-// هذا هو التخطيط الجذري، يمكنك إضافة الخطوط هنا إذا أردت
 export default function RootLayout() {
   return (
     <ThemeProvider>
       <Stack screenOptions={{ headerShown: false }}>
-        {/* هذا السطر يخفي العنوان في الشريط العلوي لجميع الشاشات بشكل افتراضي */}
         <Stack.Screen name="index" />
         <Stack.Screen name="permissions/images" />
         <Stack.Screen name="permissions/microphone" />
@@ -18,6 +18,10 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" />
         <Stack.Screen name="caregiver" />
         <Stack.Screen name="patient" />
+        <Stack.Screen name="patient/medicine-reminders" /> {/* الشاشة الجديدة */}
+        // أضف هذا السطر إلى قائمة الشاشات
+<Stack.Screen name="patient/safe-zones" />
+
       </Stack>
     </ThemeProvider>
   );

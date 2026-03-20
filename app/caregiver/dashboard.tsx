@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Image, Alert } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
-import { collection, query, onSnapshot, doc, getDoc, orderBy, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebaseConfig';
-import { COLORS, SIZES, FONTS } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Stack, useRouter } from 'expo-router';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, FONTS, SIZES } from '../../constants/theme';
+import { auth, db } from '../../firebaseConfig';
 
 interface MemoryItem { 
   id: string; 
@@ -172,7 +172,24 @@ export default function CaregiverDashboard() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
-      
+      {/* أضف هذه الأزرار في لوحة تحكم مقدم الرعاية */}
+<View style={styles.grid}>
+  <TouchableOpacity onPress={() => router.push('/caregiver/add-medicine')} style={styles.adminCard}>
+    <MaterialCommunityIcons name="pill" size={30} color={COLORS.primary} />
+    <Text>إضافة دواء</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity onPress={() => router.push('/caregiver/add-safe-zone')} style={styles.adminCard}>
+    <MaterialCommunityIcons name="map-marker-plus" size={30} color={COLORS.primary} />
+    <Text>تحديد منطقة آمنة</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity onPress={() => router.push('/caregiver/add-voice-note')} style={styles.adminCard}>
+    <MaterialCommunityIcons name="microphone-plus" size={30} color={COLORS.primary} />
+    <Text>تسجيل رسالة صوتية</Text>
+  </TouchableOpacity>
+</View>
+
       <TouchableOpacity 
         style={styles.fab} 
         onPress={() => router.replace('/patient/dashboard')}
@@ -183,6 +200,7 @@ export default function CaregiverDashboard() {
       </TouchableOpacity>
     </View>
   );
+  
 }
 
 const styles = StyleSheet.create({
@@ -260,4 +278,6 @@ const styles = StyleSheet.create({
       shadowOffset: { width: 0, height: 2 } 
     },
     fabLabel: { color: COLORS.textLight, fontWeight: FONTS.bold, marginLeft: SIZES.base, fontSize: SIZES.caption },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SIZES.padding, marginBottom: 100 },
+    adminCard: { width: '33.33%', alignItems: 'center', paddingVertical: SIZES.padding, backgroundColor: COLORS.card, marginBottom: SIZES.base, borderRadius: SIZES.radius, borderWidth: 1, borderColor: COLORS.border },
 });

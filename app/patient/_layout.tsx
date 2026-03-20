@@ -17,6 +17,7 @@ export default function PatientLayout() {
     >
       <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="memory-bank" options={{ title: 'بنك الذكريات' }} />
+      <Stack.Screen name="ai-chat" options={{ title: 'الدردشة مع المساعد' }} />
     </Stack>
   );
 }
