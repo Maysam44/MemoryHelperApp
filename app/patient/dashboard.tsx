@@ -24,10 +24,7 @@ export default function PatientDashboard() {
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [showPatientInfo, setShowPatientInfo] = useState(false);
   
-  // نظام العودة السري
-  const [tapCount, setTapCount] = useState(0);
-  
-  // للنقر المزدوج على صورة المريض
+  // للنقر المزدوج على صورة المريض للعودة
   const lastTapPatient = useRef(0);
 
   useEffect(() => {
@@ -55,25 +52,14 @@ export default function PatientDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleSecretTap = () => {
-    const newCount = tapCount + 1;
-    if (newCount >= 5) {
-      setTapCount(0);
-      setShowSwitchModal(true);
-    } else {
-      setTapCount(newCount);
-      setTimeout(() => setTapCount(0), 2000);
-    }
-  };
-
   const handlePatientAvatarPress = () => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
     if (now - lastTapPatient.current < DOUBLE_TAP_DELAY) {
-      // نقرة مزدوجة للانتقال
+      // نقرة مزدوجة للعودة لمقدم الرعاية
       setShowSwitchModal(true);
     } else {
-      // نقرة واحدة للمعلومات
+      // نقرة واحدة لعرض المعلومات
       setShowPatientInfo(true);
     }
     lastTapPatient.current = now;
@@ -111,13 +97,9 @@ export default function PatientDashboard() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
-      <Stack.Screen options={{ 
-        headerShown: false 
-      }} />
+      <Stack.Screen options={{ headerShown: false }} />
       
       <View style={styles.topHeader}>
-        <Pressable style={styles.secretArea} onPress={handleSecretTap} />
-        
         <View style={styles.headerContent}>
           <View style={styles.emptySpace} />
 
@@ -232,7 +214,7 @@ export default function PatientDashboard() {
         </TouchableOpacity>
       </Modal>
 
-      {/* مودال التنقل السري */}
+      {/* مودال التنقل (نقرة مزدوجة) */}
       <Modal visible={showSwitchModal} transparent animationType="fade" onRequestClose={() => setShowSwitchModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSwitchModal(false)}>
           <View style={styles.modalContent}>
@@ -256,7 +238,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   topHeader: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: 'white', position: 'relative' },
-  secretArea: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 10 },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   emptySpace: { width: 44, height: 44 },
   headerCenter: { flexDirection: 'row', alignItems: 'center' },

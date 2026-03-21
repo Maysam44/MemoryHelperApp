@@ -30,8 +30,9 @@ interface Message {
   imageUri?: string;
 }
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey;
+// استخدام OpenAI API كبديل أكثر استقراراً
+const GEMINI_API_URL = "https://api.openai.com/v1/chat/completions";
+const GEMINI_API_KEY = process.env.OPENAI_API_KEY;
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -61,47 +62,60 @@ export default function AIChatScreen() {
 
   const getGeminiResponse = async (userText: string, chatHistory: Message[]): Promise<string> => {
     if (!GEMINI_API_KEY) {
-      console.warn("Gemini API Key is missing.");
+      console.warn("API Key is missing.");
       return getFallbackResponse(userText);
     }
 
     try {
-      // تحويل تاريخ المحادثة إلى تنسيق Gemini
-      const contents = chatHistory.slice(-6).map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
+      // تحويل المحادثة إلى تنسيق OpenAI
+      const conversationMessages = chatHistory.slice(-6).map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
       }));
 
       // إضافة الرسالة الحالية
-      contents.push({
+      conversationMessages.push({
         role: 'user',
-        parts: [{ text: userText }]
+        content: userText
       });
 
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          systemInstruction: {
-            parts: [{
-              text: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً (لهجة بيضاء أو فصحى مبسطة). افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. إذا شارك صورة، عبّر عن جمالها وساعده في تذكر تفاصيلها. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'."
-            }]
+      const requestBody = {
+        model: "gpt-4.1-mini",
+        messages: [
+          {
+            role: 'system',
+            content: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'."
           },
-          generationConfig: { temperature: 0.8, maxOutputTokens: 300 }
-        }),
+          ...conversationMessages
+        ],
+        temperature: 0.8,
+        max_tokens: 300
+      };
+
+      const response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GEMINI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody),
       });
 
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-      const data = await response.json();
-      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`API Error ${response.status}:`, errorData);
+        throw new Error(`API Error: ${response.status}`);
       }
 
+      const data = await response.json();
+      if (data.choices?.[0]?.message?.content) {
+        return data.choices[0].message.content;
+      }
+
+      console.warn("Unexpected API response format:", data);
       return getFallbackResponse(userText);
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      console.error("API Error:", error);
       return getFallbackResponse(userText);
     }
   };
@@ -148,40 +162,55 @@ export default function AIChatScreen() {
 
   const handlePickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('إذن الصور', 'نحتاج للوصول للصور لمشاركتها مع رفيقك.');
-        return;
-      }
+      Alert.alert(
+        'طلب إذن الوصول للمعرض',
+        'نحتاج لإذنك للوصول لمعرض الصور لمشاركتها مع رفيقك.',
+        [
+          {
+            text: 'إلغاء',
+            style: 'cancel',
+          },
+          {
+            text: 'السماح',
+            onPress: async () => {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('عذراً', 'لم يتم منح إذن الوصول للمعرض. يمكنك تفعيله من إعدادات التطبيق.');
+                return;
+              }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 0.8,
+              });
 
-      if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        const userMessage: Message = {
-          id: Date.now().toString(),
-          text: 'شاركت صورة معك',
-          sender: 'user',
-          timestamp: new Date(),
-          imageUri,
-        };
-        setMessages((prev) => [...prev, userMessage]);
-        setIsLoading(true);
-        setTimeout(() => {
-          const aiMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            text: 'يا لها من صورة جميلة جداً! الصور دائماً تحمل ذكريات غالية في قلوبنا. هل تحب أن تحكي لي قصة هذه الصورة؟',
-            sender: 'ai',
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, aiMessage]);
-          setIsLoading(false);
-        }, 1500);
-      }
+              if (!result.canceled && result.assets[0]) {
+                const imageUri = result.assets[0].uri;
+                const userMessage: Message = {
+                  id: Date.now().toString(),
+                  text: 'شاركت صورة معك',
+                  sender: 'user',
+                  timestamp: new Date(),
+                  imageUri,
+                };
+                setMessages((prev) => [...prev, userMessage]);
+                setIsLoading(true);
+                setTimeout(() => {
+                  const aiMessage: Message = {
+                    id: (Date.now() + 1).toString(),
+                    text: 'يا لها من صورة جميلة جداً! الصور دائماً تحمل ذكريات غالية في قلوبنا. هل تحب أن تحكي لي قصة هذه الصورة؟',
+                    sender: 'ai',
+                    timestamp: new Date(),
+                  };
+                  setMessages((prev) => [...prev, aiMessage]);
+                  setIsLoading(false);
+                }, 1500);
+              }
+            },
+          },
+        ]
+      );
     } catch (error) {
       Alert.alert('خطأ', 'حدث خطأ في اختيار الصورة.');
     }
