@@ -1,15 +1,21 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, ScrollView, Image, Alert, Modal } from 'react-native';
 import { COLORS, FONTS, SIZES } from '../../constants/theme';
 import { auth, db } from '../../firebaseConfig';
 
 export default function CaregiverDashboard() {
   const router = useRouter();
-  const [caregiverName, setCaregiverName] = useState('');
+  const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCaregiverInfo, setShowCaregiverInfo] = useState(false);
+  const [showPatientInfo, setShowPatientInfo] = useState(false);
+  
+  // للنقر المزدوج
+  const lastTapCaregiver = useRef(0);
+  const lastTapPatient = useRef(0);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -18,11 +24,51 @@ export default function CaregiverDashboard() {
     const userDocRef = doc(db, "users", user.uid);
     getDoc(userDocRef).then(docSnap => {
       if (docSnap.exists()) {
-        setCaregiverName(docSnap.data().caregiver.name);
+        setUserData(docSnap.data());
       }
       setIsLoading(false);
     }).catch(() => setIsLoading(false));
   }, []);
+
+  const handleCaregiverPress = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - lastTapCaregiver.current < DOUBLE_TAP_DELAY) {
+      // نقة مزدوجة
+      Alert.alert(
+        "الانتقال لعالم المريض",
+        "هل تود الانتقال لواجهة المريض الآن؟",
+        [
+          { text: "إلغاء", style: "cancel" },
+          { text: "نعم، انتقال", onPress: () => router.replace('/patient/dashboard') }
+        ]
+      );
+    } else {
+      // نقرة واحدة
+      setShowCaregiverInfo(true);
+    }
+    lastTapCaregiver.current = now;
+  };
+
+  const handlePatientPress = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - lastTapPatient.current < DOUBLE_TAP_DELAY) {
+      // نقرة مزدوجة
+      Alert.alert(
+        "الانتقال لعالم المريض",
+        "هل تود الانتقال لواجهة المريض الآن؟",
+        [
+          { text: "إلغاء", style: "cancel" },
+          { text: "نعم، انتقال", onPress: () => router.replace('/patient/dashboard') }
+        ]
+      );
+    } else {
+      // نقرة واحدة
+      setShowPatientInfo(true);
+    }
+    lastTapPatient.current = now;
+  };
 
   const AdminBox = ({ title, icon, color, onPress, subtitle }: any) => (
     <TouchableOpacity 
@@ -41,6 +87,68 @@ export default function CaregiverDashboard() {
     </TouchableOpacity>
   );
 
+  const InfoModal = ({ visible, onClose, title, data, isPatient }: any) => (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={24} color={COLORS.textDark} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.modalBody}>
+            <View style={styles.modalImageContainer}>
+              {data?.profileImage ? (
+                <Image source={{ uri: data.profileImage }} style={styles.modalImage} />
+              ) : (
+                <View style={[styles.modalImage, styles.modalImagePlaceholder]}>
+                  <MaterialCommunityIcons name="account" size={60} color={COLORS.textMuted} />
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>الاسم:</Text>
+              <Text style={styles.infoValue}>{data?.name || 'غير محدد'}</Text>
+            </View>
+            
+            {isPatient ? (
+              <>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>العمر:</Text>
+                  <Text style={styles.infoValue}>{data?.age || 'غير محدد'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>المرحلة:</Text>
+                  <Text style={styles.infoValue}>{data?.stage === 'early' ? 'مبكرة' : data?.stage === 'mid' ? 'متوسطة' : 'متأخرة'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>يحب:</Text>
+                  <Text style={styles.infoValue}>{data?.likes || 'غير محدد'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>الوظيفة:</Text>
+                  <Text style={styles.infoValue}>{data?.job || 'غير محدد'}</Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>العلاقة:</Text>
+                <Text style={styles.infoValue}>{data?.relationship || 'غير محدد'}</Text>
+              </View>
+            )}
+          </View>
+          
+          <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose}>
+            <Text style={styles.modalCloseBtnText}>إغلاق</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -49,23 +157,42 @@ export default function CaregiverDashboard() {
     );
   }
 
+  const caregiver = userData?.caregiver || { name: userData?.name, relationship: userData?.relationship, profileImage: userData?.profileImage };
+  const patient = userData?.patient || { name: userData?.patientName, age: userData?.patientAge, stage: userData?.patientStage };
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ 
         title: 'لوحة التحكم', 
         headerTitleAlign: 'center',
         headerRight: () => (
-          <TouchableOpacity onPress={() => router.push('/caregiver/settings')} style={{ marginRight: 15 }}>
-            <MaterialCommunityIcons name="cog-outline" size={24} color={COLORS.primary} />
+          <TouchableOpacity onPress={handleCaregiverPress} style={styles.headerAvatar}>
+            {caregiver.profileImage ? (
+              <Image source={{ uri: caregiver.profileImage }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                <MaterialCommunityIcons name="account" size={20} color="white" />
+              </View>
+            )}
           </TouchableOpacity>
         ),
-        headerLeft: () => null // إزالة أي زر آخر قد يظهر في اليسار
+        headerLeft: () => (
+          <TouchableOpacity onPress={handlePatientPress} style={styles.headerAvatarLeft}>
+            {patient.profileImage ? (
+              <Image source={{ uri: patient.profileImage }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarImage, styles.avatarPlaceholder, { backgroundColor: COLORS.secondary }]}>
+                <MaterialCommunityIcons name="account-heart" size={20} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
+        )
       }} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.welcomeTitle}>أهلاً بك، {caregiverName || 'مقدم الرعاية'}</Text>
-          <Text style={styles.welcomeSubtitle}>ماذا تود أن تفعل اليوم لمساعدة مريضك؟</Text>
+          <Text style={styles.welcomeTitle}>أهلاً بك، {caregiver.name || 'مقدم الرعاية'}</Text>
+          <Text style={styles.welcomeSubtitle}>ماذا تود أن تفعل اليوم لمساعدة {patient.name || 'مريضك'}؟</Text>
         </View>
 
         <View style={styles.grid}>
@@ -84,7 +211,7 @@ export default function CaregiverDashboard() {
             color="#FF7675" 
             onPress={() => router.push('/caregiver/add-voice-note')} 
           />
-
+          
           <AdminBox 
             title="الأدوية" 
             subtitle="تنظيم مواعيد وجرعات الدواء"
@@ -102,11 +229,13 @@ export default function CaregiverDashboard() {
           />
         </View>
 
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsTitle}>نصيحة اليوم</Text>
-          <View style={styles.tipCard}>
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#F9CA24" />
-            <Text style={styles.tipText}>التواصل الصوتي المستمر يشعر المريض بالأمان ويقلل من حالات القلق والتوتر.</Text>
+        <View style={styles.noteContainer}>
+          <View style={styles.noteCard}>
+            <MaterialCommunityIcons name="information-outline" size={24} color={COLORS.primary} />
+            <View style={styles.noteTextContent}>
+              <Text style={styles.noteTitle}>تلميح سريع</Text>
+              <Text style={styles.noteText}>يمكنك الضغط مرتين على صورة حسابك بالأعلى للانتقال السريع لعالم المريض. وللعودة، ابحث عن المساحة السرية في أعلى شاشة المريض واضغط 5 مرات.</Text>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -124,6 +253,22 @@ export default function CaregiverDashboard() {
           <MaterialCommunityIcons name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
+
+      <InfoModal 
+        visible={showCaregiverInfo} 
+        onClose={() => setShowCaregiverInfo(false)} 
+        title="معلومات مقدم الرعاية" 
+        data={caregiver} 
+        isPatient={false} 
+      />
+      
+      <InfoModal 
+        visible={showPatientInfo} 
+        onClose={() => setShowPatientInfo(false)} 
+        title="معلومات المريض" 
+        data={patient} 
+        isPatient={true} 
+      />
     </View>
   );
 }
@@ -160,24 +305,24 @@ const styles = StyleSheet.create({
   boxTextContainer: { flex: 1, alignItems: 'flex-end' },
   boxTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textDark },
   boxSubtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 4 },
-  statsContainer: { marginTop: 30 },
-  statsTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textDark, marginBottom: 15, textAlign: 'right' },
-  tipCard: {
-    backgroundColor: '#FFFBEB',
+  headerAvatar: { marginRight: 15 },
+  headerAvatarLeft: { marginLeft: 15 },
+  avatarImage: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.primary },
+  avatarPlaceholder: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
+  noteContainer: { marginTop: 30 },
+  noteCard: {
+    backgroundColor: COLORS.primary + '10',
     padding: 20,
     borderRadius: 20,
     flexDirection: 'row-reverse',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: '#FEF3C7',
+    borderColor: COLORS.primary + '30',
   },
-  tipText: { flex: 1, marginRight: 15, fontSize: 14, color: '#92400E', textAlign: 'right', lineHeight: 22 },
-  switchContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-  },
+  noteTextContent: { flex: 1, marginRight: 15, alignItems: 'flex-end' },
+  noteTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 5 },
+  noteText: { fontSize: 14, color: COLORS.textDark, textAlign: 'right', lineHeight: 22 },
+  switchContainer: { position: 'absolute', bottom: 20, left: 20, right: 20 },
   switchButton: {
     backgroundColor: 'white',
     padding: 15,
@@ -201,4 +346,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   switchText: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, flex: 1, textAlign: 'right', marginRight: 15 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: 'white', width: '90%', borderRadius: 25, padding: 20, elevation: 10 },
+  modalHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textDark },
+  modalBody: { alignItems: 'center', marginBottom: 20 },
+  modalImageContainer: { marginBottom: 20 },
+  modalImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: COLORS.primary },
+  modalImagePlaceholder: { backgroundColor: COLORS.backgroundLight, justifyContent: 'center', alignItems: 'center' },
+  infoRow: { flexDirection: 'row-reverse', width: '100%', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 8 },
+  infoLabel: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, width: 80, textAlign: 'right' },
+  infoValue: { fontSize: 16, color: COLORS.textDark, flex: 1, textAlign: 'right' },
+  modalCloseBtn: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 15, alignItems: 'center' },
+  modalCloseBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
