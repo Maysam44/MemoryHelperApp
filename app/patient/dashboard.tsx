@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +22,9 @@ export default function PatientDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  
+  // نظام العودة السري: يتطلب الضغط 5 مرات متتالية بسرعة على مساحة فارغة في الهيدر
+  const [tapCount, setTapCount] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -47,6 +50,18 @@ export default function PatientDashboard() {
     fetchPatientData();
     return () => clearInterval(timer);
   }, []);
+
+  const handleSecretTap = () => {
+    const newCount = tapCount + 1;
+    if (newCount >= 5) {
+      setTapCount(0);
+      setShowSwitchModal(true);
+    } else {
+      setTapCount(newCount);
+      // إعادة تعيين العداد بعد ثانيتين من الخمول
+      setTimeout(() => setTapCount(0), 2000);
+    }
+  };
 
   const PatientBox = ({ title, icon, color, onPress, subtitle }: any) => (
     <TouchableOpacity 
@@ -80,23 +95,21 @@ export default function PatientDashboard() {
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
       <Stack.Screen options={{ headerShown: false }} />
       
+      {/* الهيدر المحدث: اسم التطبيق واللوغو في الوسط */}
       <View style={styles.topHeader}>
-        <View style={styles.headerContent}>
+        {/* مساحة سرية للضغط (Invisible Backdoor) */}
+        <Pressable style={styles.secretArea} onPress={handleSecretTap} />
+        
+        <View style={styles.headerCenter}>
+          <Image 
+            source={require('../images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <View style={styles.appNameContainer}>
             <Text style={[styles.appNamePart1, { color: COLORS.secondary }]}>رفيق</Text>
             <Text style={[styles.appNamePart2, { color: COLORS.primary }]}>الذاكرة</Text>
           </View>
-          <TouchableOpacity 
-            onPress={() => setShowSwitchModal(true)}
-            activeOpacity={0.8} 
-            style={styles.logoContainer}
-          >
-            <Image 
-              source={require('../images/logo.png')} 
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -162,7 +175,7 @@ export default function PatientDashboard() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* مودال التنقل الإبداعي - حماية بلمسة مطولة أو رمز */}
+      {/* مودال التنقل السري */}
       <Modal
         visible={showSwitchModal}
         transparent={true}
@@ -175,8 +188,8 @@ export default function PatientDashboard() {
           onPress={() => setShowSwitchModal(false)}
         >
           <View style={styles.modalContent}>
-            <MaterialCommunityIcons name="lock-outline" size={50} color={COLORS.primary} />
-            <Text style={styles.modalTitle}>منطقة خاصة</Text>
+            <MaterialCommunityIcons name="shield-account-outline" size={50} color={COLORS.primary} />
+            <Text style={styles.modalTitle}>تأكيد الهوية</Text>
             <Text style={styles.modalSubtitle}>هل أنت مقدم الرعاية وتود العودة للوحة التحكم؟</Text>
             <TouchableOpacity 
               style={[styles.modalBtn, { backgroundColor: COLORS.primary }]}
@@ -200,13 +213,33 @@ export default function PatientDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  topHeader: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: 'white' },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  appNameContainer: { flexDirection: 'row-reverse', alignItems: 'center' },
-  appNamePart1: { fontSize: 24, fontWeight: 'bold', marginRight: 4 },
-  appNamePart2: { fontSize: 24, fontWeight: 'bold' },
-  logoContainer: { width: 50, height: 50 },
-  logo: { width: '100%', height: '100%' },
+  topHeader: { 
+    paddingHorizontal: 20, 
+    paddingVertical: 15, 
+    backgroundColor: 'white',
+    position: 'relative'
+  },
+  secretArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    zIndex: 10,
+  },
+  headerCenter: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  appNameContainer: { 
+    flexDirection: 'row-reverse', 
+    alignItems: 'center',
+    marginLeft: 10
+  },
+  appNamePart1: { fontSize: 22, fontWeight: 'bold', marginRight: 4 },
+  appNamePart2: { fontSize: 22, fontWeight: 'bold' },
+  logo: { width: 45, height: 45 },
   realityHeader: { paddingVertical: 15, alignItems: 'center', justifyContent: 'center', elevation: 4 },
   dateText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   timeText: { color: 'white', fontSize: 14, marginTop: 4 },

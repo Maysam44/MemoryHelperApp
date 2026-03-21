@@ -58,7 +58,8 @@ export default function CaregiverDashboard() {
           <TouchableOpacity onPress={() => router.push('/caregiver/settings')} style={{ marginRight: 15 }}>
             <MaterialCommunityIcons name="cog-outline" size={24} color={COLORS.primary} />
           </TouchableOpacity>
-        )
+        ),
+        headerLeft: () => null // إزالة أي زر آخر قد يظهر في اليسار
       }} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -110,7 +111,6 @@ export default function CaregiverDashboard() {
         </View>
       </ScrollView>
 
-      {/* الطريقة الإبداعية للتنقل: سحب للأعلى أو زر "تبديل العالم" */}
       <View style={styles.switchContainer}>
         <TouchableOpacity 
           style={styles.switchButton} 
