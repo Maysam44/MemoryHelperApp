@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -33,6 +33,15 @@ export default function AddPersonScreen() {
   }, [sound]);
 
   const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('إذن الصور مطلوب', 'نحتاج للوصول للصور لاختيار صورة الذكرى.', [
+        { text: 'إلغاء', style: 'cancel' },
+        { text: 'الإعدادات', onPress: () => Linking.openSettings() }
+      ]);
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -47,9 +56,12 @@ export default function AddPersonScreen() {
 
   async function startRecording() {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('خطأ', 'يرجى منح إذن الوصول للميكروفون');
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('إذن الميكروفون مطلوب', 'نحتاج للوصول للميكروفون لتسجيل الرسالة الصوتية.', [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'الإعدادات', onPress: () => Linking.openSettings() }
+        ]);
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
@@ -88,13 +100,12 @@ export default function AddPersonScreen() {
       const user = auth.currentUser;
       if (user) {
         const personId = Date.now().toString();
-        // توحيد المسار إلى users/{uid}/memoryBank ليتوافق مع لوحة التحكم والتعديل
         await setDoc(doc(db, "users", user.uid, "memoryBank", personId), {
           id: personId,
           name,
-          relation: relationship, // استخدام relation ليتوافق مع edit-memory
+          relation: relationship,
           description,
-          imageUri: image, // استخدام imageUri ليتوافق مع dashboard و edit-memory
+          imageUri: image,
           audioUrl: recordingUri,
           createdAt: new Date().toISOString(),
         });
@@ -111,78 +122,78 @@ export default function AddPersonScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#F8F9FD' }]}>
       <Stack.Screen options={{ title: 'إضافة شخص جديد', headerTitleAlign: 'center' }} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          <TouchableOpacity style={[styles.imageContainer, { borderColor: dynamicColors.border }]} onPress={pickImage}>
+          <TouchableOpacity style={[styles.imageContainer, { borderColor: COLORS.primary + '30' }]} onPress={pickImage} activeOpacity={0.8}>
             {image ? (
               <Image source={{ uri: image }} style={styles.image} />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <MaterialCommunityIcons name="camera-plus" size={40} color={dynamicColors.textMuted} />
-                <Text style={{ color: dynamicColors.textMuted, marginTop: 10 }}>إضافة صورة</Text>
+                <MaterialCommunityIcons name="camera-plus" size={45} color={COLORS.primary} />
+                <Text style={{ color: COLORS.primary, marginTop: 10, fontWeight: 'bold' }}>إضافة صورة</Text>
               </View>
             )}
           </TouchableOpacity>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>الاسم الكامل</Text>
+            <Text style={styles.label}>الاسم الكامل</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
+              style={styles.input}
               value={name}
               onChangeText={setName}
               placeholder="مثال: أحمد محمد"
-              placeholderTextColor={dynamicColors.textMuted}
+              placeholderTextColor="#999"
               textAlign="right"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>صلة القرابة</Text>
+            <Text style={styles.label}>صلة القرابة</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
+              style={styles.input}
               value={relationship}
               onChangeText={setRelationship}
               placeholder="مثال: الابن الأكبر"
-              placeholderTextColor={dynamicColors.textMuted}
+              placeholderTextColor="#999"
               textAlign="right"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>وصف بسيط (اختياري)</Text>
+            <Text style={styles.label}>وصف بسيط (اختياري)</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border, height: 80 }]}
+              style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
               value={description}
               onChangeText={setDescription}
               placeholder="مثال: يحب لعب الشطرنج معك"
-              placeholderTextColor={dynamicColors.textMuted}
+              placeholderTextColor="#999"
               multiline
               textAlign="right"
             />
           </View>
 
-          <View style={[styles.audioSection, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border }]}>
-            <Text style={[styles.label, { color: dynamicColors.textDark, textAlign: 'center' }]}>سجل رسالة صوتية للمريض</Text>
+          <View style={styles.audioSection}>
+            <Text style={[styles.label, { textAlign: 'center', marginBottom: 15 }]}>سجل رسالة صوتية للمريض</Text>
             <View style={styles.audioButtonsRow}>
               <TouchableOpacity 
                 style={[styles.audioBtn, { backgroundColor: isRecording ? '#FF5252' : COLORS.primary }]} 
                 onPress={isRecording ? stopRecording : startRecording}
               >
                 <MaterialCommunityIcons name={isRecording ? "stop" : "microphone"} size={24} color="white" />
-                <Text style={styles.audioBtnText}>{isRecording ? "إيقاف" : "تسجيل"}</Text>
+                <Text style={styles.audioBtnText}>{isRecording ? "إيقاف" : "بدء التسجيل"}</Text>
               </TouchableOpacity>
 
-              {recordingUri && (
+              {recordingUri && !isRecording && (
                 <TouchableOpacity style={[styles.audioBtn, { backgroundColor: COLORS.secondary }]} onPress={playRecordedAudio}>
                   <MaterialCommunityIcons name="play" size={24} color="white" />
                   <Text style={styles.audioBtnText}>تشغيل</Text>
                 </TouchableOpacity>
               )}
             </View>
-            {recordingUri && <Text style={styles.successText}>✓ تم تسجيل الصوت بنجاح</Text>}
+            {recordingUri && !isRecording && <Text style={styles.successText}>✓ تم تسجيل الصوت بنجاح</Text>}
           </View>
 
           <TouchableOpacity 
@@ -210,9 +221,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 20 },
   imageContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     borderWidth: 2,
     borderStyle: 'dashed',
     alignSelf: 'center',
@@ -220,43 +231,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
     overflow: 'hidden',
+    backgroundColor: 'white',
   },
   image: { width: '100%', height: '100%' },
   imagePlaceholder: { alignItems: 'center' },
   inputGroup: { marginBottom: 20 },
-  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, textAlign: 'right' },
+  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'right', color: COLORS.textDark },
   input: {
+    backgroundColor: 'white',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 15,
+    borderColor: '#eee',
+    borderRadius: 15,
+    padding: 18,
     fontSize: 16,
     textAlign: 'right',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   audioSection: {
-    padding: 20,
-    borderRadius: 15,
-    borderWidth: 1,
+    padding: 25,
+    borderRadius: 25,
+    backgroundColor: 'white',
     marginBottom: 30,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#eee',
+    elevation: 2,
   },
-  audioButtonsRow: { flexDirection: 'row-reverse', marginTop: 15 },
+  audioButtonsRow: { flexDirection: 'row-reverse', marginTop: 10 },
   audioBtn: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginHorizontal: 5,
+    paddingVertical: 12,
+    borderRadius: 30,
+    marginHorizontal: 8,
+    elevation: 3,
   },
   audioBtnText: { color: 'white', fontWeight: 'bold', marginRight: 8 },
-  successText: { color: '#4CAF50', marginTop: 10, fontWeight: 'bold' },
+  successText: { color: '#4CAF50', marginTop: 15, fontWeight: 'bold' },
   submitButton: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
-    borderRadius: 15,
+    padding: 20,
+    borderRadius: 20,
     marginBottom: 40,
+    elevation: 5,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
   submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 });
