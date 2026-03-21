@@ -31,17 +31,34 @@ export default function AddVoiceNoteScreen() {
 
   async function startRecording() {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('خطأ', 'يرجى منح إذن الوصول للميكروفون');
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setIsRecording(true);
+      // طلب الإذن بشكل واضح قبل التسجيل
+      Alert.alert(
+        'طلب إذن الميكروفون',
+        'نحتاج لإذنك للوصول للميكروفون لتسجيل الرسالة الصوتية.',
+        [
+          {
+            text: 'إلغاء',
+            style: 'cancel',
+          },
+          {
+            text: 'السماح',
+            onPress: async () => {
+              const permission = await Audio.requestPermissionsAsync();
+              if (permission.status !== 'granted') {
+                Alert.alert('عذراً', 'لم يتم منح إذن الوصول للميكروفون. يمكنك تفعيله من إعدادات التطبيق.');
+                return;
+              }
+              await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+              const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+              setRecording(recording);
+              setIsRecording(true);
+            },
+          },
+        ]
+      );
     } catch (err) {
       console.error('Failed to start recording', err);
+      Alert.alert('خطأ', 'حدث خطأ أثناء محاولة بدء التسجيل.');
     }
   }
 

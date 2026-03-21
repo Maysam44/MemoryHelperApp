@@ -11,11 +11,9 @@ export default function CaregiverDashboard() {
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showCaregiverInfo, setShowCaregiverInfo] = useState(false);
-  const [showPatientInfo, setShowPatientInfo] = useState(false);
   
-  // للنقر المزدوج
+  // للنقر المزدوج على الصورة
   const lastTapCaregiver = useRef(0);
-  const lastTapPatient = useRef(0);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -30,11 +28,11 @@ export default function CaregiverDashboard() {
     }).catch(() => setIsLoading(false));
   }, []);
 
-  const handleCaregiverPress = () => {
+  const handleCaregiverAvatarPress = () => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
     if (now - lastTapCaregiver.current < DOUBLE_TAP_DELAY) {
-      // نقة مزدوجة
+      // نقرة مزدوجة - الانتقال للمريض
       Alert.alert(
         "الانتقال لعالم المريض",
         "هل تود الانتقال لواجهة المريض الآن؟",
@@ -44,30 +42,10 @@ export default function CaregiverDashboard() {
         ]
       );
     } else {
-      // نقرة واحدة
+      // نقرة واحدة - عرض المعلومات
       setShowCaregiverInfo(true);
     }
     lastTapCaregiver.current = now;
-  };
-
-  const handlePatientPress = () => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    if (now - lastTapPatient.current < DOUBLE_TAP_DELAY) {
-      // نقرة مزدوجة
-      Alert.alert(
-        "الانتقال لعالم المريض",
-        "هل تود الانتقال لواجهة المريض الآن؟",
-        [
-          { text: "إلغاء", style: "cancel" },
-          { text: "نعم، انتقال", onPress: () => router.replace('/patient/dashboard') }
-        ]
-      );
-    } else {
-      // نقرة واحدة
-      setShowPatientInfo(true);
-    }
-    lastTapPatient.current = now;
   };
 
   const AdminBox = ({ title, icon, color, onPress, subtitle }: any) => (
@@ -87,7 +65,7 @@ export default function CaregiverDashboard() {
     </TouchableOpacity>
   );
 
-  const InfoModal = ({ visible, onClose, title, data, isPatient }: any) => (
+  const InfoModal = ({ visible, onClose, title, data }: any) => (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
@@ -114,31 +92,10 @@ export default function CaregiverDashboard() {
               <Text style={styles.infoValue}>{data?.name || 'غير محدد'}</Text>
             </View>
             
-            {isPatient ? (
-              <>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>العمر:</Text>
-                  <Text style={styles.infoValue}>{data?.age || 'غير محدد'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>المرحلة:</Text>
-                  <Text style={styles.infoValue}>{data?.stage === 'early' ? 'مبكرة' : data?.stage === 'mid' ? 'متوسطة' : 'متأخرة'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>يحب:</Text>
-                  <Text style={styles.infoValue}>{data?.likes || 'غير محدد'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>الوظيفة:</Text>
-                  <Text style={styles.infoValue}>{data?.job || 'غير محدد'}</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>العلاقة:</Text>
-                <Text style={styles.infoValue}>{data?.relationship || 'غير محدد'}</Text>
-              </View>
-            )}
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>العلاقة:</Text>
+              <Text style={styles.infoValue}>{data?.relationship || 'غير محدد'}</Text>
+            </View>
           </View>
           
           <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose}>
@@ -166,7 +123,7 @@ export default function CaregiverDashboard() {
         title: 'لوحة التحكم', 
         headerTitleAlign: 'center',
         headerRight: () => (
-          <TouchableOpacity onPress={handleCaregiverPress} style={styles.headerAvatar}>
+          <TouchableOpacity onPress={handleCaregiverAvatarPress} style={styles.headerAvatar}>
             {caregiver.profileImage ? (
               <Image source={{ uri: caregiver.profileImage }} style={styles.avatarImage} />
             ) : (
@@ -177,14 +134,8 @@ export default function CaregiverDashboard() {
           </TouchableOpacity>
         ),
         headerLeft: () => (
-          <TouchableOpacity onPress={handlePatientPress} style={styles.headerAvatarLeft}>
-            {patient.profileImage ? (
-              <Image source={{ uri: patient.profileImage }} style={styles.avatarImage} />
-            ) : (
-              <View style={[styles.avatarImage, styles.avatarPlaceholder, { backgroundColor: COLORS.secondary }]}>
-                <MaterialCommunityIcons name="account-heart" size={20} color="white" />
-              </View>
-            )}
+          <TouchableOpacity onPress={() => router.push('/caregiver/settings')} style={{ marginLeft: 15 }}>
+            <MaterialCommunityIcons name="cog-outline" size={24} color={COLORS.primary} />
           </TouchableOpacity>
         )
       }} />
@@ -234,7 +185,7 @@ export default function CaregiverDashboard() {
             <MaterialCommunityIcons name="information-outline" size={24} color={COLORS.primary} />
             <View style={styles.noteTextContent}>
               <Text style={styles.noteTitle}>تلميح سريع</Text>
-              <Text style={styles.noteText}>يمكنك الضغط مرتين على صورة حسابك بالأعلى للانتقال السريع لعالم المريض. وللعودة، ابحث عن المساحة السرية في أعلى شاشة المريض واضغط 5 مرات.</Text>
+              <Text style={styles.noteText}>اضغط مرة واحدة على صورتك بالأعلى لعرض معلوماتك. اضغط مرتين للانتقال السريع لعالم المريض.</Text>
             </View>
           </View>
         </View>
@@ -258,16 +209,7 @@ export default function CaregiverDashboard() {
         visible={showCaregiverInfo} 
         onClose={() => setShowCaregiverInfo(false)} 
         title="معلومات مقدم الرعاية" 
-        data={caregiver} 
-        isPatient={false} 
-      />
-      
-      <InfoModal 
-        visible={showPatientInfo} 
-        onClose={() => setShowPatientInfo(false)} 
-        title="معلومات المريض" 
-        data={patient} 
-        isPatient={true} 
+        data={caregiver}
       />
     </View>
   );
@@ -306,8 +248,7 @@ const styles = StyleSheet.create({
   boxTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textDark },
   boxSubtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 4 },
   headerAvatar: { marginRight: 15 },
-  headerAvatarLeft: { marginLeft: 15 },
-  avatarImage: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.primary },
+  avatarImage: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: COLORS.primary },
   avatarPlaceholder: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   noteContainer: { marginTop: 30 },
   noteCard: {

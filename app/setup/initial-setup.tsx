@@ -34,22 +34,37 @@ export default function InitialSetupScreen() {
   const [additionalInfo, setAdditionalInfo] = useState('');
 
   const pickImage = async (setter: (uri: string) => void) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('عذراً', 'نحتاج لإذن الوصول للاستوديو لإضافة الصورة.');
-      return;
-    }
+    Alert.alert(
+      'طلب إذن الوصول للمعرض',
+      'نحتاج لإذنك للوصول لمعرض الصور لاختيار صورتك.',
+      [
+        {
+          text: 'إلغاء',
+          style: 'cancel',
+        },
+        {
+          text: 'السماح',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('عذراً', 'لم يتم منح إذن الوصول للمعرض. يمكنك تفعيله من إعدادات التطبيق.');
+              return;
+            }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.5,
+            });
 
-    if (!result.canceled) {
-      setter(result.assets[0].uri);
-    }
+            if (!result.canceled) {
+              setter(result.assets[0].uri);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formItems: FormItem[] = [

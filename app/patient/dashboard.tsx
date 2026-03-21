@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity, Dimensions, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,15 +22,13 @@ export default function PatientDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
   const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [modalType, setModalType] = useState<'patient' | 'caregiver'>('patient');
+  const [showPatientInfo, setShowPatientInfo] = useState(false);
   
   // نظام العودة السري
   const [tapCount, setTapCount] = useState(0);
   
-  // للنقر المزدوج
+  // للنقر المزدوج على صورة المريض
   const lastTapPatient = useRef(0);
-  const lastTapCaregiver = useRef(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -76,24 +74,9 @@ export default function PatientDashboard() {
       setShowSwitchModal(true);
     } else {
       // نقرة واحدة للمعلومات
-      setModalType('patient');
-      setShowInfoModal(true);
+      setShowPatientInfo(true);
     }
     lastTapPatient.current = now;
-  };
-
-  const handleCaregiverAvatarPress = () => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    if (now - lastTapCaregiver.current < DOUBLE_TAP_DELAY) {
-      // نقرة مزدوجة للانتقال
-      setShowSwitchModal(true);
-    } else {
-      // نقرة واحدة للمعلومات
-      setModalType('caregiver');
-      setShowInfoModal(true);
-    }
-    lastTapCaregiver.current = now;
   };
 
   const PatientBox = ({ title, icon, color, onPress, subtitle }: any) => (
@@ -125,25 +108,18 @@ export default function PatientDashboard() {
   }
 
   const patient = userData?.patient || { name: userData?.patientName, profileImage: null };
-  const caregiver = userData?.caregiver || { name: userData?.name, relationship: userData?.relationship, profileImage: userData?.profileImage };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ 
+        headerShown: false 
+      }} />
       
       <View style={styles.topHeader}>
         <Pressable style={styles.secretArea} onPress={handleSecretTap} />
         
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={handleCaregiverAvatarPress} style={styles.headerAvatar}>
-            {caregiver.profileImage ? (
-              <Image source={{ uri: caregiver.profileImage }} style={styles.avatarImage} />
-            ) : (
-              <View style={[styles.avatarImage, styles.avatarPlaceholder, { backgroundColor: COLORS.secondary }]}>
-                <MaterialCommunityIcons name="account-heart" size={24} color="white" />
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.emptySpace} />
 
           <View style={styles.headerCenter}>
             <Image 
@@ -161,7 +137,7 @@ export default function PatientDashboard() {
             {patient.profileImage ? (
               <Image source={{ uri: patient.profileImage }} style={styles.avatarImage} />
             ) : (
-              <View style={[styles.avatarImage, styles.avatarPlaceholder, { backgroundColor: COLORS.primary }]}>
+              <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
                 <MaterialCommunityIcons name="account" size={24} color="white" />
               </View>
             )}
@@ -231,27 +207,25 @@ export default function PatientDashboard() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* مودال المعلومات */}
-      <Modal visible={showInfoModal} transparent animationType="fade" onRequestClose={() => setShowInfoModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowInfoModal(false)}>
+      {/* مودال معلومات المريض */}
+      <Modal visible={showPatientInfo} transparent animationType="fade" onRequestClose={() => setShowPatientInfo(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPatientInfo(false)}>
           <View style={styles.infoModalContent}>
             <View style={styles.modalImageContainer}>
-              {(modalType === 'patient' ? patient.profileImage : caregiver.profileImage) ? (
-                <Image source={{ uri: modalType === 'patient' ? patient.profileImage : caregiver.profileImage }} style={styles.infoModalImage} />
+              {patient.profileImage ? (
+                <Image source={{ uri: patient.profileImage }} style={styles.infoModalImage} />
               ) : (
-                <View style={[styles.infoModalImage, styles.infoModalImagePlaceholder, { backgroundColor: modalType === 'patient' ? COLORS.primary : COLORS.secondary }]}>
-                  <MaterialCommunityIcons name={modalType === 'patient' ? "account" : "account-heart"} size={60} color="white" />
+                <View style={[styles.infoModalImage, styles.infoModalImagePlaceholder]}>
+                  <MaterialCommunityIcons name="account" size={60} color="white" />
                 </View>
               )}
             </View>
-            <Text style={styles.infoModalName}>{modalType === 'patient' ? patient.name : caregiver.name}</Text>
-            <Text style={styles.infoModalSub}>
-              {modalType === 'patient' ? `العمر: ${patient.age || 'غير محدد'}` : `العلاقة: ${caregiver.relationship || 'مقدم الرعاية'}`}
-            </Text>
-            {modalType === 'patient' && patient.likes && (
+            <Text style={styles.infoModalName}>{patient.name}</Text>
+            <Text style={styles.infoModalSub}>العمر: {patient.age || 'غير محدد'}</Text>
+            {patient.likes && (
               <Text style={styles.infoModalDetail}>يحب: {patient.likes}</Text>
             )}
-            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: COLORS.primary }]} onPress={() => setShowInfoModal(false)}>
+            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: COLORS.primary }]} onPress={() => setShowPatientInfo(false)}>
               <Text style={styles.modalBtnText}>إغلاق</Text>
             </TouchableOpacity>
           </View>
@@ -284,10 +258,11 @@ const styles = StyleSheet.create({
   topHeader: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: 'white', position: 'relative' },
   secretArea: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 10 },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  emptySpace: { width: 44, height: 44 },
   headerCenter: { flexDirection: 'row', alignItems: 'center' },
   headerAvatar: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%' },
-  avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
+  avatarPlaceholder: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   appNameContainer: { flexDirection: 'row-reverse', alignItems: 'center', marginLeft: 10 },
   appNamePart1: { fontSize: 20, fontWeight: 'bold', marginRight: 4 },
   appNamePart2: { fontSize: 20, fontWeight: 'bold' },
@@ -334,8 +309,9 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: 'white', width: '85%', padding: 30, borderRadius: 30, alignItems: 'center' },
   infoModalContent: { backgroundColor: 'white', width: '80%', padding: 25, borderRadius: 25, alignItems: 'center' },
-  infoModalImage: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
-  infoModalImagePlaceholder: { justifyContent: 'center', alignItems: 'center' },
+  modalImageContainer: { marginBottom: 15 },
+  infoModalImage: { width: 120, height: 120, borderRadius: 60 },
+  infoModalImagePlaceholder: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   infoModalName: { fontSize: 22, fontWeight: 'bold', color: COLORS.textDark, marginBottom: 5 },
   infoModalSub: { fontSize: 16, color: COLORS.textMuted, marginBottom: 10 },
   infoModalDetail: { fontSize: 14, color: COLORS.textDark, textAlign: 'center', marginBottom: 15 },
