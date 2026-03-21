@@ -117,7 +117,7 @@ export default function AddVoiceNoteScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           
           <View style={[styles.audioBox, { backgroundColor: isRecording ? '#FF525215' : COLORS.primary + '10', borderColor: isRecording ? '#FF5252' : COLORS.primary }]}>
-            <MaterialCommunityIcons name={isRecording ? "microphone-pulse" : "microphone"} size={60} color={isRecording ? '#FF5252' : COLORS.primary} />
+            <MaterialCommunityIcons name={isRecording ? "microphone" : "microphone-plus"} size={60} color={isRecording ? '#FF5252' : COLORS.primary} />
             <Text style={[styles.audioTitle, { color: isRecording ? '#FF5252' : COLORS.primary }]}>{isRecording ? "جاري التسجيل..." : "سجل رسالة حنونة"}</Text>
             
             <View style={styles.audioButtonsRow}>

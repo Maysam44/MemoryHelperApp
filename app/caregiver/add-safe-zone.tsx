@@ -102,10 +102,10 @@ export default function AddSafeZoneScreen() {
             <Text style={[styles.locationTitle, { color: COLORS.primary }]}>إحداثيات المنطقة</Text>
             {isLoadingLocation ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginTop: 10 }} />
-            ) : latitude ? (
+            ) : latitude && longitude ? (
               <View style={{ alignItems: 'center', marginTop: 10 }}>
                 <Text style={styles.locationCoords}>خط العرض: {latitude.toFixed(6)}</Text>
-                <Text style={styles.locationCoords}>خط الطول: {longitude.toFixed(6)}</Text>
+                <Text style={styles.locationCoords}>خط الطول: {longitude?.toFixed(6)}</Text>
               </View>
             ) : (
               <Text style={styles.errorText}>لم يتم تحديد الموقع بعد</Text>

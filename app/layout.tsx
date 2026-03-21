@@ -18,9 +18,9 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" />
         <Stack.Screen name="caregiver" />
         <Stack.Screen name="patient" />
-        <Stack.Screen name="patient/medicine-reminders" /> {/* الشاشة الجديدة */}
-        // أضف هذا السطر إلى قائمة الشاشات
-<Stack.Screen name="patient/safe-zones" />
+        <Stack.Screen name="patient/medicine-reminders" />
+        <Stack.Screen name="patient/safe-zones" />
+        <Stack.Screen name="patient/ai-chat" />
 
       </Stack>
     </ThemeProvider>

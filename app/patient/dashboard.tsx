@@ -79,7 +79,7 @@ export default function PatientDashboard() {
   // Haptic Feedback
   const triggerHaptic = async () => {
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Light);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Haptic error:", error);
     }
@@ -295,7 +295,7 @@ export default function PatientDashboard() {
             <View style={styles.infoDetailsContainer}>
               {patient.age && (
                 <View style={styles.infoDetailRow}>
-                  <MaterialCommunityIcons name="cake-birthday" size={20} color={COLORS.primary} />
+                  <MaterialCommunityIcons name="cake" size={50} color={COLORS.primary} />
                   <Text style={styles.infoDetailText}>العمر: {patient.age} سنة</Text>
                 </View>
               )}

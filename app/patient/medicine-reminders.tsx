@@ -32,6 +32,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -179,7 +181,7 @@ export default function MedicineRemindersScreen() {
   // Haptic Feedback
   const triggerHaptic = async () => {
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Light);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Haptic error:", error);
     }

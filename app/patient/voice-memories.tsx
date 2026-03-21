@@ -54,7 +54,7 @@ export default function VoiceMemoriesScreen() {
   // Haptic Feedback
   const triggerHaptic = async () => {
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Light);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Haptic error:", error);
     }
