@@ -15,6 +15,7 @@ export default function EditProfileScreen() {
   const [name, setName] = useState('');
   const [relationship, setRelationship] = useState('');
   const [age, setAge] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,6 +32,7 @@ export default function EditProfileScreen() {
             setName(data.name || '');
             setRelationship(data.relationship || '');
             setAge(data.age?.toString() || '');
+            setPhoneNumber(data.caregiverPhone || data.phoneNumber || '');
             setProfileImage(data.profileImage || null);
           }
         }
@@ -78,6 +80,7 @@ export default function EditProfileScreen() {
           name: name.trim(),
           relationship: relationship.trim(),
           age: age.trim() ? parseInt(age.trim()) : null,
+          caregiverPhone: phoneNumber.trim(),
           profileImage: profileImage,
         });
         Alert.alert("نجاح", "تم تحديث الملف الشخصي بنجاح.");
@@ -161,6 +164,20 @@ export default function EditProfileScreen() {
               textAlign="right"
             />
           </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: dynamicColors.textDark }]}>رقم الهاتف للطوارئ</Text>
+            <Text style={[styles.helperText, { color: dynamicColors.textMuted }]}>هذا الرقم سيتم الاتصال به عند ضغط المريض على زر النجدة</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: dynamicColors.card, borderColor: dynamicColors.border, color: dynamicColors.textDark }]}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="أدخل رقم هاتفك"
+              placeholderTextColor={dynamicColors.textMuted}
+              keyboardType="phone-pad"
+              textAlign="right"
+            />
+          </View>
           
           <TouchableOpacity 
             style={[styles.saveButton, { backgroundColor: dynamicColors.primary }, isSaving && { opacity: 0.7 }]} 
@@ -205,5 +222,6 @@ const styles = StyleSheet.create({
   label: { fontSize: SIZES.body, fontWeight: FONTS.bold, marginBottom: SIZES.base, textAlign: 'right' },
   input: { padding: SIZES.padding, borderRadius: SIZES.radius, borderWidth: 1, textAlign: 'right', fontSize: SIZES.body },
   saveButton: { padding: SIZES.padding, borderRadius: SIZES.radius, alignItems: 'center', marginTop: SIZES.padding },
-  saveButtonText: { fontSize: SIZES.h3, fontWeight: FONTS.bold }
+  saveButtonText: { fontSize: SIZES.h3, fontWeight: FONTS.bold },
+  helperText: { fontSize: SIZES.caption, marginBottom: SIZES.base, textAlign: 'right' }
 });
