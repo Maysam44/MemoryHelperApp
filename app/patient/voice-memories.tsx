@@ -1,8 +1,9 @@
-// app/patient/voice-memories.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import * as Speech from 'expo-speech';
 import { auth, db } from '../../firebaseConfig';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { Audio } from 'expo-av';
@@ -16,7 +17,14 @@ export default function VoiceMemoriesScreen() {
 
   useEffect(() => {
     fetchVoices();
-    return () => { if (sound) sound.unloadAsync(); };
+    // تشغيل التوجيه الصوتي التلقائي
+    const timer = setTimeout(() => {
+      speakGuidance();
+    }, 500);
+    return () => {
+      clearTimeout(timer);
+      if (sound) sound.unloadAsync();
+    };
   }, []);
 
   const fetchVoices = async () => {
@@ -29,13 +37,52 @@ export default function VoiceMemoriesScreen() {
     setLoading(false);
   };
 
-  const playVoice = async (uri: string, id: string) => {
+  // التوجيه الصوتي التلقائي
+  const speakGuidance = async () => {
+    try {
+      const message = 'لديك رسائل صوتية جديدة من أحبائك. اضغط على أي رسالة لسماعها.';
+      await Speech.speak(message, {
+        language: 'ar-SA',
+        rate: 0.85,
+        pitch: 1,
+      });
+    } catch (error) {
+      console.error("Speech error:", error);
+    }
+  };
+
+  // Haptic Feedback
+  const triggerHaptic = async () => {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Light);
+    } catch (error) {
+      console.error("Haptic error:", error);
+    }
+  };
+
+  const playVoice = async (uri: string, id: string, senderName?: string) => {
+    triggerHaptic();
+    
     if (playingId === id) {
       await sound?.stopAsync();
       setPlayingId(null);
       return;
     }
+    
     if (sound) await sound.unloadAsync();
+    
+    // تشغيل رسالة صوتية قبل تشغيل الرسالة
+    try {
+      const message = `تشغيل رسالة من ${senderName || 'أحد أفراد العائلة'}`;
+      await Speech.speak(message, {
+        language: 'ar-SA',
+        rate: 0.85,
+        pitch: 1,
+      });
+    } catch (error) {
+      console.error("Speech error:", error);
+    }
+
     const { sound: newSound } = await Audio.Sound.createAsync({ uri });
     setSound(newSound);
     setPlayingId(id);
@@ -43,30 +90,63 @@ export default function VoiceMemoriesScreen() {
     newSound.setOnPlaybackStatusUpdate((s: any) => { if (s.didJustFinish) setPlayingId(null); });
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>جاري تحميل الرسائل...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>رسائل أحبابي الصوتية 🎤</Text>
-      {loading ? <ActivityIndicator size="large" color={COLORS.primary} /> : (
+      <View style={styles.headerContainer}>
+        <Text style={styles.header}>رسائل أحبابي الصوتية</Text>
+        <MaterialCommunityIcons name="microphone" size={40} color={COLORS.primary} />
+      </View>
+
+      {voices.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="inbox-multiple" size={100} color="#ccc" />
+          <Text style={styles.emptyText}>لا توجد رسائل صوتية حالياً</Text>
+        </View>
+      ) : (
         <FlatList
           data={voices}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity 
-              style={[styles.voiceCard, { borderColor: playingId === item.id ? COLORS.primary : '#eee' }]}
-              onPress={() => playVoice(item.audioUrl, item.id)}
+              style={[
+                styles.giantVoiceCard, 
+                { 
+                  borderColor: playingId === item.id ? COLORS.primary : '#eee',
+                  backgroundColor: playingId === item.id ? COLORS.primary + '10' : 'white'
+                }
+              ]}
+              onPress={() => playVoice(item.audioUrl, item.id, item.sender)}
+              activeOpacity={0.7}
             >
-              <View style={styles.iconCircle}>
+              <View style={[styles.giantIconCircle, { backgroundColor: playingId === item.id ? COLORS.primary : COLORS.primary + '15' }]}>
                 <MaterialCommunityIcons 
-                  name={playingId === item.id ? "pause" : "play"} 
-                  size={30} color={COLORS.primary} 
+                  name={playingId === item.id ? "pause-circle" : "play-circle"} 
+                  size={50} 
+                  color={playingId === item.id ? 'white' : COLORS.primary}
                 />
               </View>
-              <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                <Text style={styles.voiceTitle}>{item.title || "رسالة جديدة"}</Text>
-                <Text style={styles.voiceSubText}>اضغط للاستماع بصوت {item.sender || "أحد أفراد العائلة"}</Text>
+              <View style={styles.giantVoiceInfo}>
+                <Text style={styles.giantVoiceTitle}>{item.title || "رسالة جديدة"}</Text>
+                <Text style={styles.giantVoiceSubText}>من: {item.sender || "أحد أفراد العائلة"}</Text>
+                {playingId === item.id && (
+                  <Text style={styles.playingIndicator}>جاري التشغيل...</Text>
+                )}
               </View>
             </TouchableOpacity>
           )}
+          contentContainerStyle={styles.listContent}
+          scrollEnabled={true}
         />
       )}
     </SafeAreaView>
@@ -74,13 +154,47 @@ export default function VoiceMemoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 20 },
-  header: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, color: '#333' },
-  voiceCard: {
-    flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: 'white',
-    padding: 15, borderRadius: 20, marginBottom: 15, borderWidth: 1, elevation: 2
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 20, fontSize: 18, color: '#666' },
+  headerContainer: { 
+    flexDirection: 'row-reverse', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    paddingVertical: 25, 
+    paddingHorizontal: 20,
+    backgroundColor: 'white',
+    elevation: 3,
   },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: COLORS.primary + '15', justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
-  voiceTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  voiceSubText: { fontSize: 14, color: '#666', marginTop: 4 }
+  header: { fontSize: 28, fontWeight: 'bold', color: '#333', marginRight: 15 },
+  listContent: { padding: 20, paddingBottom: 40 },
+  giantVoiceCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 25,
+    borderRadius: 30,
+    marginBottom: 20,
+    borderWidth: 2,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    minHeight: 140,
+  },
+  giantIconCircle: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 50, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginLeft: 20,
+    elevation: 3,
+  },
+  giantVoiceInfo: { flex: 1, alignItems: 'flex-end' },
+  giantVoiceTitle: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+  giantVoiceSubText: { fontSize: 18, color: '#666', marginTop: 8 },
+  playingIndicator: { fontSize: 16, color: COLORS.primary, fontWeight: 'bold', marginTop: 8 },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyText: { fontSize: 20, color: '#999', marginTop: 20, textAlign: 'center' },
 });
