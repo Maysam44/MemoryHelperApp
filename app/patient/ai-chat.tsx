@@ -27,9 +27,7 @@ interface Message {
   base64Image?: string;
 }
 
-const GEMINI_API_KEY =
-  Constants.expoConfig?.extra?.geminiApiKey ||
-  process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = "AIzaSyDO5MD1bBQ3EwYO-_Bw-jHO_cFPKF4Vc-o";
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -61,8 +59,9 @@ export default function AIChatScreen() {
     }
 
     try {
+      // استخدام الرابط الصحيح v1beta/models/gemini-1.5-flash:generateContent
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -78,18 +77,26 @@ export default function AIChatScreen() {
                 ],
               },
             ],
+            generationConfig: {
+              temperature: 0.9,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 2048,
+            },
           }),
         }
       );
 
+      console.log('Response Status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.text();
         console.error('Gemini API Error:', response.status, errorData);
         return "صار خطأ بسيط، بس أنا معك ❤️";
       }
 
       const data = await response.json();
-      console.log('API Response:', data);
+      console.log('API Response:', JSON.stringify(data));
       
       if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
         return data.candidates[0].content.parts[0].text;
