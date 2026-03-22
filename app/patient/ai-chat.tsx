@@ -28,13 +28,10 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   imageUri?: string;
-  base64Image?: string; // Store base64 for sending to Gemini
+  base64Image?: string;
 }
 
-// Get API Key from Expo Constants (recommended way)
 const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || process.env.GEMINI_API_KEY;
-
-// Initialize Google Generative AI
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 export default function AIChatScreen() {
@@ -53,9 +50,11 @@ export default function AIChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const scrollToBottom = () => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
   };
 
   useEffect(() => {
@@ -63,79 +62,50 @@ export default function AIChatScreen() {
   }, [messages]);
 
   const getGeminiResponse = async (userText: string, imageBase64?: string): Promise<string> => {
-    if (!genAI) {
-      console.error("Gemini API Key is missing!");
-      return getFallbackResponse(userText);
-    }
-
+    if (!genAI) return getFallbackResponse(userText);
     try {
-      // Use gemini-1.5-flash for fast and free-tier responses
       const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash",
         systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'. إذا أرسل المستخدم صورة، حللها بحنان وذكره بذكريات جميلة مرتبطة بمحتواها."
       });
-
       const chat = model.startChat({
         history: messages.slice(-10).map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }],
         })),
       });
-
       let result;
       if (imageBase64) {
-        // If there's an image, we use the generative model directly with text and image
         const prompt = userText || "ماذا ترى في هذه الصورة؟ احكِ لي عنها بحنان.";
-        const imagePart = {
-          inlineData: {
-            data: imageBase64,
-            mimeType: "image/jpeg"
-          }
-        };
+        const imagePart = { inlineData: { data: imageBase64, mimeType: "image/jpeg" } };
         result = await model.generateContent([prompt, imagePart]);
       } else {
         result = await chat.sendMessage(userText);
       }
-
       const response = await result.response;
       return response.text();
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      console.error(error);
       return getFallbackResponse(userText);
     }
   };
 
   const getFallbackResponse = (userText: string): string => {
     const userLower = userText.toLowerCase();
-    if (userLower.includes('هاي') || userLower.includes('مرحبا') || userLower.includes('سلام')) 
-      return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك اليوم؟";
-    return "هذا جميل جداً! أنا معك وأصغي إليك بكل حب. أخبرني المزيد عما يدور في خاطرك.";
+    if (userLower.includes('هاي') || userLower.includes('مرحبا')) return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك؟";
+    return "هذا جميل جداً! أنا معك وأصغي إليك بكل حب. أخبرني المزيد.";
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
-
     const userText = inputText.trim();
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: userText,
-      sender: 'user',
-      timestamp: new Date(),
-    };
-
+    const userMessage: Message = { id: Date.now().toString(), text: userText, sender: 'user', timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
-    Keyboard.dismiss();
-
     try {
       const aiResponseText = await getGeminiResponse(userText);
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: aiResponseText,
-        sender: 'ai',
-        timestamp: new Date(),
-      };
+      const aiMessage: Message = { id: (Date.now() + 1).toString(), text: aiResponseText, sender: 'ai', timestamp: new Date() };
       setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error(error);
@@ -147,45 +117,33 @@ export default function AIChatScreen() {
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('عذراً', 'نحتاج لإذن الوصول للمعرض لمشاركة الصور مع رفيقك.');
+      Alert.alert('عذراً', 'نحتاج لإذن الوصول للمعرض.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.5, // Reduced quality for faster API transfer
-      base64: true, // Need base64 for Gemini API
+      quality: 0.5,
+      base64: true,
     });
-
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      const imageUri = asset.uri;
-      const base64Data = asset.base64;
-
       const userMessage: Message = {
         id: Date.now().toString(),
         text: 'شاركت صورة معك',
         sender: 'user',
         timestamp: new Date(),
-        imageUri,
-        base64Image: base64Data || undefined,
+        imageUri: asset.uri,
+        base64Image: asset.base64 || undefined,
       };
-
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
-
       try {
-        const aiResponseText = await getGeminiResponse("حلل هذه الصورة وحدثني عنها بحنان", base64Data || undefined);
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: aiResponseText,
-          sender: 'ai',
-          timestamp: new Date(),
-        };
+        const aiResponseText = await getGeminiResponse("حلل هذه الصورة وحدثني عنها بحنان", asset.base64 || undefined);
+        const aiMessage: Message = { id: (Date.now() + 1).toString(), text: aiResponseText, sender: 'ai', timestamp: new Date() };
         setMessages((prev) => [...prev, aiMessage]);
       } catch (error) {
-        console.error("Image Analysis Error:", error);
+        console.error(error);
       } finally {
         setIsLoading(false);
       }
@@ -193,29 +151,10 @@ export default function AIChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[
-      styles.messageContainer, 
-      item.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer
-    ]}>
-      <View style={[
-        styles.messageBubble, 
-        item.sender === 'user' 
-          ? { backgroundColor: COLORS.primary } 
-          : { backgroundColor: 'white', borderWidth: 1, borderColor: '#eee' }
-      ]}>
+    <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer]}>
+      <View style={[styles.messageBubble, item.sender === 'user' ? { backgroundColor: COLORS.primary } : { backgroundColor: 'white', borderWidth: 1, borderColor: '#eee' }]}>
         {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
-        <Text style={[
-          styles.messageText, 
-          { color: item.sender === 'user' ? 'white' : '#333' }
-        ]}>
-          {item.text}
-        </Text>
-        <Text style={[
-          styles.timestampText,
-          { color: item.sender === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }
-        ]}>
-          {item.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+        <Text style={[styles.messageText, { color: item.sender === 'user' ? 'white' : '#333' }]}>{item.text}</Text>
       </View>
     </View>
   );
@@ -232,7 +171,7 @@ export default function AIChatScreen() {
         )
       }} />
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         style={{ flex: 1 }} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
@@ -242,38 +181,29 @@ export default function AIChatScreen() {
           keyExtractor={(item) => item.id} 
           renderItem={renderMessage} 
           contentContainerStyle={styles.listContent} 
-          showsVerticalScrollIndicator={false} 
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={scrollToBottom}
         />
-        
         {isLoading && (
           <View style={styles.loadingIndicator}>
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={{ marginRight: 10, color: '#666', fontFamily: Platform.OS === 'ios' ? 'Arial' : 'sans-serif' }}>
-              الرفيق الذكي يفكر...
-            </Text>
+            <Text style={{ marginRight: 10, color: '#666' }}>الرفيق الذكي يكتب...</Text>
           </View>
         )}
-
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage} disabled={isLoading}>
+          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
             <MaterialCommunityIcons name="image-plus" size={26} color={COLORS.primary} />
           </TouchableOpacity>
-          
           <TextInput 
             style={styles.input} 
             placeholder="اكتب لرفيقك..." 
             value={inputText} 
             onChangeText={setInputText} 
             multiline 
-            textAlign="right"
-            placeholderTextColor="#999"
+            textAlign="right" 
           />
-          
           <TouchableOpacity 
-            style={[
-              styles.sendButton, 
-              { backgroundColor: (inputText.trim() && !isLoading) ? COLORS.primary : '#ccc' }
-            ]} 
+            style={[styles.sendButton, { backgroundColor: inputText.trim() ? COLORS.primary : '#ccc' }]} 
             onPress={handleSendMessage} 
             disabled={!inputText.trim() || isLoading}
           >
@@ -287,58 +217,16 @@ export default function AIChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 20, paddingBottom: 10 },
-  messageContainer: { marginBottom: 15, maxWidth: '85%' },
+  listContent: { padding: 20 },
+  messageContainer: { marginBottom: 20, maxWidth: '85%' },
   userMessageContainer: { alignSelf: 'flex-start' },
   aiMessageContainer: { alignSelf: 'flex-end' },
-  messageBubble: { 
-    padding: 12, 
-    borderRadius: 20, 
-    elevation: 1, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.05, 
-    shadowRadius: 2,
-    minWidth: 80
-  },
-  messageText: { fontSize: 17, lineHeight: 24, textAlign: 'right' },
-  timestampText: { fontSize: 11, marginTop: 4, textAlign: 'left' },
-  messageImage: { width: 220, height: 160, borderRadius: 15, marginBottom: 8 },
+  messageBubble: { padding: 15, borderRadius: 25, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
+  messageText: { fontSize: 18, lineHeight: 26, textAlign: 'right' },
+  messageImage: { width: 220, height: 160, borderRadius: 20, marginBottom: 10 },
   loadingIndicator: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 10 },
-  inputContainer: { 
-    flexDirection: 'row-reverse', 
-    alignItems: 'center', 
-    padding: 12, 
-    backgroundColor: 'white', 
-    borderTopWidth: 1, 
-    borderTopColor: '#eee' 
-  },
-  attachButton: { 
-    width: 45, 
-    height: 45, 
-    borderRadius: 22.5, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginLeft: 10, 
-    backgroundColor: '#f0f0f0' 
-  },
-  input: { 
-    flex: 1, 
-    borderRadius: 20, 
-    paddingHorizontal: 15, 
-    paddingVertical: 8, 
-    maxHeight: 100, 
-    fontSize: 16, 
-    backgroundColor: '#f8f9fa', 
-    borderWidth: 1, 
-    borderColor: '#eee', 
-    textAlign: 'right' 
-  },
-  sendButton: { 
-    width: 45, 
-    height: 45, 
-    borderRadius: 22.5, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: 10 
-  },
+  inputContainer: { flexDirection: 'row-reverse', alignItems: 'center', padding: 15, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#eee' },
+  attachButton: { width: 45, height: 45, borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', marginLeft: 10, backgroundColor: '#f0f0f0' },
+  input: { flex: 1, borderRadius: 25, paddingHorizontal: 20, paddingVertical: 10, maxHeight: 100, fontSize: 18, backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#eee', textAlign: 'right' },
+  sendButton: { width: 45, height: 45, borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
 });
