@@ -2,26 +2,45 @@
 
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
-// إعداد معالج التنبيهات المحلية فقط
+// إعداد معالج التنبيهات المحلية
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowAlert: true, // تم تغييرها من shouldShowBanner/List لضمان التوافق
   }),
 });
 
 export const useNotifications = () => {
-  const notificationListener = useRef<any>(null);
-  const responseListener = useRef<any>(null);
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
+    // طلب الأذونات عند استخدام الهوك (للتأكد)
+    const requestPermissions = async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        await Notifications.requestPermissionsAsync();
+      }
+      
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('medicine-reminders', {
+          name: 'تنبيهات الأدوية',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+    };
+
+    requestPermissions();
+
     // استمع إلى التنبيهات الواردة
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log('تم استقبال تنبيه محلي:', notification.request.content.title);
+        console.log('تم استقبال تنبيه:', notification.request.content.title);
       }
     );
 
@@ -33,16 +52,16 @@ export const useNotifications = () => {
     );
 
     return () => {
+      // الإصلاح: استخدام .remove() بدلاً من Notifications.removeNotificationSubscription
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current.remove();
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
     };
   }, []);
 
-  // دالة لجدولة الرسائل التحفيزية - يتم استدعاؤها يدوياً وليس تلقائياً في useEffect
   const scheduleMotivationMessages = async () => {
     try {
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -62,7 +81,6 @@ export const useNotifications = () => {
             repeats: true,
           },
         });
-        console.log('تم جدولة الرسائل التحفيزية كل 10 دقائق');
       }
     } catch (error) {
       console.error('Error scheduling motivation:', error);
@@ -111,14 +129,28 @@ export const useNotifications = () => {
     }
   };
 
+  const cancelMedicineNotification = async (medicineName: string) => {
+    try {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notification of scheduled) {
+        if (notification.content.data?.medicineName === medicineName) {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+          console.log(`تم إلغاء تنبيه الدواء: ${medicineName}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error canceling notification:', error);
+    }
+  };
+
   const cancelAllNotifications = async () => {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('تم مسح جميع التنبيهات المجدولة');
   };
 
   return {
     scheduleMedicineReminder,
     scheduleMotivationMessages,
+    cancelMedicineNotification,
     cancelAllNotifications,
     getAllScheduledNotifications: Notifications.getAllScheduledNotificationsAsync,
   };

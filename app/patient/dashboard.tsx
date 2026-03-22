@@ -50,7 +50,6 @@ export default function PatientDashboard() {
     fetchData();
     
     // جدولة الرسائل التحفيزية "مرة واحدة فقط" عند فتح لوحة التحكم
-    // الدالة داخل الهوك تتحقق أصلاً إذا كانت مجدولة مسبقاً
     scheduleMotivationMessages();
 
     return () => clearInterval(timer);

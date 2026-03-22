@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SIZES, FONTS } from '../../constants/theme';
@@ -7,13 +8,38 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function NotificationsPermissionScreen() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRequestPermission = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
-      // لا نعطل المستخدم
+    setIsLoading(true);
+    try {
+      // طلب الإذن من النظام
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      // إعداد قناة الإشعارات للأندرويد لضمان ظهور التنبيهات بوضوح
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('medicine-reminders', {
+          name: 'تنبيهات الأدوية',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+
+      // الانتقال للخطوة التالية
+      router.push('/permissions/privacy');
+    } catch (error) {
+      console.error("Error requesting notifications permission:", error);
+      router.push('/permissions/privacy');
+    } finally {
+      setIsLoading(false);
     }
-    router.push('/permissions/privacy');
   };
 
   return (
@@ -40,10 +66,21 @@ export default function NotificationsPermissionScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.button} onPress={handleRequestPermission}>
-          <Text style={styles.buttonText}>تفعيل الإشعارات</Text>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={handleRequestPermission}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.buttonText}>تفعيل الإشعارات</Text>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.skipButton} onPress={() => router.push('/permissions/privacy')}>
+        <TouchableOpacity 
+          style={styles.skipButton} 
+          onPress={() => router.push('/permissions/privacy')}
+        >
           <Text style={styles.skipText}>تخطي الآن</Text>
         </TouchableOpacity>
       </View>

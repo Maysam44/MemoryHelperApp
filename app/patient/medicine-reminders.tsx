@@ -7,12 +7,14 @@ import { auth, db } from '../../firebaseConfig';
 import { collection, query, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
+import { useNotifications } from '../hooks/use-notifications';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MedicineRemindersScreen() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
+  const { cancelMedicineNotification } = useNotifications();
   const [medicines, setMedicines] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
@@ -58,6 +60,9 @@ export default function MedicineRemindersScreen() {
         status: 'taken',
         lastTakenDate: today
       });
+
+      // إلغاء التنبيه المجدول لهذا اليوم عند أخذ الدواء
+      await cancelMedicineNotification(medicine.name);
 
       Alert.alert('أحسنت!', 'تم تسجيل أخذ الدواء بنجاح. بارك الله في صحتك.');
     } catch (error) {
