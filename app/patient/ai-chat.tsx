@@ -14,11 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 import { COLORS } from '../../constants/theme';
 import * as ImagePicker from 'expo-image-picker';
 import Constants from 'expo-constants';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface Message {
   id: string;
@@ -32,8 +30,6 @@ interface Message {
 const GEMINI_API_KEY =
   Constants.expoConfig?.extra?.geminiApiKey ||
   process.env.GEMINI_API_KEY;
-
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -60,21 +56,47 @@ export default function AIChatScreen() {
   }, [messages]);
 
   const getGeminiResponse = async (text: string) => {
-    if (!genAI) return "أنا هنا معك ❤️";
+    if (!GEMINI_API_KEY) {
+      return "أنا هنا معك ❤️ (يرجى إضافة مفتاح Gemini API)";
+    }
 
     try {
-      const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: text,
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
 
-      const chat = model.startChat({
-        history: [],
-      });
+      if (!response.ok) {
+        console.error('Gemini API Error:', response.status, response.statusText);
+        return "صار خطأ بسيط، بس أنا معك ❤️";
+      }
 
-      const result = await chat.sendMessage(text);
-      return (await result.response).text();
-    } catch (e) {
-      console.error("Gemini Error:", e);
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        console.error('Unexpected API response:', data);
+        return "صار خطأ بسيط، بس أنا معك ❤️";
+      }
+    } catch (error) {
+      console.error('Fetch Error:', error);
       return "صار خطأ بسيط، بس أنا معك ❤️";
     }
   };
