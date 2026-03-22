@@ -29,6 +29,19 @@ interface Message {
 
 const GEMINI_API_KEY = "AIzaSyDO5MD1bBQ3EwYO-_Bw-jHO_cFPKF4Vc-o";
 
+// قائمة الردود الذكية المحلية (Fallback responses)
+const SMART_RESPONSES: { [key: string]: string } = {
+  'صباح': 'صباح الخير! كيف حالك؟ 😊',
+  'مساء': 'مساء الخير! أتمنى يومك كان رائع 🌙',
+  'شكرا': 'أهلاً وسهلاً! أنا هنا لمساعدتك ❤️',
+  'شو': 'أنا هنا لمساعدتك في أي شيء تحتاجه 💪',
+  'كيف': 'أنا بخير الحمد لله! وأنت كيفك؟',
+  'ذاكرة': 'تطبيق مساعد الذاكرة يساعدك على تذكر الأشياء المهمة 🧠',
+  'مساعدة': 'أنا هنا لمساعدتك! اسأل عني أي شيء',
+  'hello': 'Hello! How can I help you? 👋',
+  'hi': 'Hi there! 😊',
+};
+
 export default function AIChatScreen() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
@@ -53,16 +66,44 @@ export default function AIChatScreen() {
     }
   }, [messages]);
 
-  const getGeminiResponse = async (text: string) => {
-    if (!GEMINI_API_KEY) {
-      return "أنا هنا معك ❤️ (يرجى إضافة مفتاح Gemini API)";
+  // الدالة الذكية للبحث عن ردود محلية
+  const getSmartFallbackResponse = (text: string): string | null => {
+    const lowerText = text.toLowerCase().trim();
+    
+    for (const [keyword, response] of Object.entries(SMART_RESPONSES)) {
+      if (lowerText.includes(keyword)) {
+        return response;
+      }
     }
+    
+    return null;
+  };
 
-    try {
-      // استخدام الرابط الصحيح v1beta/models/gemini-1.5-flash:generateContent
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
+  // محاولة الحصول على رد من Gemini API مع عدة محاولات
+  const tryGeminiEndpoints = async (text: string): Promise<string | null> => {
+    const endpoints = [
+      // المحاولة الأولى: v1beta مع gemini-1.5-flash
+      {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        model: 'gemini-1.5-flash',
+      },
+      // المحاولة الثانية: v1 مع gemini-pro
+      {
+        url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+        model: 'gemini-pro',
+      },
+      // المحاولة الثالثة: v1beta مع gemini-pro
+      {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+        model: 'gemini-pro-beta',
+      },
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`محاولة الاتصال بـ ${endpoint.model}...`);
+        
+        const response = await fetch(endpoint.url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -78,38 +119,65 @@ export default function AIChatScreen() {
               },
             ],
             generationConfig: {
-              temperature: 0.9,
+              temperature: 0.7,
               topK: 40,
               topP: 0.95,
-              maxOutputTokens: 2048,
+              maxOutputTokens: 1024,
             },
           }),
+        });
+
+        console.log(`Response Status (${endpoint.model}):`, response.status);
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+            console.log(`✓ نجحت المحاولة مع ${endpoint.model}`);
+            return data.candidates[0].content.parts[0].text;
+          }
+        } else {
+          const errorText = await response.text();
+          console.log(`✗ فشلت المحاولة مع ${endpoint.model}: ${response.status}`);
         }
-      );
-
-      console.log('Response Status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Gemini API Error:', response.status, errorData);
-        return "صار خطأ بسيط، بس أنا معك ❤️";
+      } catch (error) {
+        console.log(`✗ خطأ في الاتصال مع ${endpoint.model}:`, error);
       }
+    }
 
-      const data = await response.json();
-      console.log('API Response:', JSON.stringify(data));
+    return null;
+  };
+
+  const getGeminiResponse = async (text: string): Promise<string> => {
+    if (!GEMINI_API_KEY) {
+      return "أنا هنا معك ❤️ (يرجى إضافة مفتاح Gemini API)";
+    }
+
+    try {
+      // المحاولة الأولى: Gemini API
+      console.log('بدء محاولة الاتصال بـ Gemini API...');
+      const geminiResponse = await tryGeminiEndpoints(text);
       
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
-      } else if (data.error) {
-        console.error('API Error:', data.error);
-        return "صار خطأ بسيط، بس أنا معك ❤️";
-      } else {
-        console.error('Unexpected API response:', data);
-        return "صار خطأ بسيط، بس أنا معك ❤️";
+      if (geminiResponse) {
+        return geminiResponse;
       }
+
+      // المحاولة الثانية: البحث عن ردود ذكية محلية
+      console.log('فشلت جميع محاولات Gemini، البحث عن ردود محلية...');
+      const smartResponse = getSmartFallbackResponse(text);
+      
+      if (smartResponse) {
+        return smartResponse;
+      }
+
+      // الرد الافتراضي النهائي
+      return "أنا هنا معك ❤️ يمكنك أن تسألني عن أي شيء!";
     } catch (error) {
-      console.error('Fetch Error:', error);
-      return "صار خطأ بسيط، بس أنا معك ❤️";
+      console.error('خطأ عام:', error);
+      
+      // محاولة أخيرة: البحث عن ردود محلية
+      const smartResponse = getSmartFallbackResponse(text);
+      return smartResponse || "أنا هنا معك ❤️";
     }
   };
 
@@ -223,8 +291,8 @@ export default function AIChatScreen() {
 
         {isLoading && (
           <View style={styles.loading}>
-            <ActivityIndicator />
-            <Text>يكتب...</Text>
+            <ActivityIndicator color={COLORS.primary} />
+            <Text style={{ marginLeft: 10, color: COLORS.primary }}>يكتب...</Text>
           </View>
         )}
 
@@ -243,6 +311,7 @@ export default function AIChatScreen() {
             value={inputText}
             onChangeText={setInputText}
             placeholder="اكتب..."
+            placeholderTextColor="#999"
           />
 
           <TouchableOpacity onPress={handleSendMessage}>
@@ -305,11 +374,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: Platform.OS === 'ios' ? 10 : 5,
+    color: '#000',
   },
 
   loading: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 60,
+    paddingHorizontal: 20,
   },
 });
