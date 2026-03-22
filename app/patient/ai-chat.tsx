@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Image,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -47,7 +48,16 @@ export default function AIChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const flatListRef = useRef<any>(null);
+  const flatListRef = useRef<FlatList>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
 
   const getGeminiResponse = async (text: string) => {
     if (!genAI) return "أنا هنا معك ❤️";
@@ -64,6 +74,7 @@ export default function AIChatScreen() {
       const result = await chat.sendMessage(text);
       return (await result.response).text();
     } catch (e) {
+      console.error("Gemini Error:", e);
       return "صار خطأ بسيط، بس أنا معك ❤️";
     }
   };
@@ -163,18 +174,17 @@ export default function AIChatScreen() {
       />
 
       <View style={{ flex: 1 }}>
-        <KeyboardAwareFlatList
-innerRef={(ref) => {
-  flatListRef.current = ref;
-}}          data={messages}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
-          enableOnAndroid
-          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             padding: 20,
             paddingBottom: 100,
           }}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
         />
 
         {isLoading && (
@@ -223,11 +233,11 @@ const styles = StyleSheet.create({
   },
 
   userMessage: {
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end',
   },
 
   aiMessage: {
-    alignSelf: 'flex-end',
+    alignSelf: 'flex-start',
   },
 
   bubble: {
