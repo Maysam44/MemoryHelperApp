@@ -26,7 +26,7 @@ interface Message {
   imageUri?: string;
 }
 
-const OPENAI_API_KEY = "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"; // من platform.openai.com
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // من platform.openai.com
 
 const getAIResponse = async (text: string, retries = 2): Promise<string> => {
   try {
