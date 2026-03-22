@@ -1,4 +1,4 @@
-//npx expo start -c
+//npx expo start --no-dev
 
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
