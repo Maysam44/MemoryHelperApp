@@ -13,11 +13,6 @@ export default function CaregiverLayout() {
       headerTitleAlign: 'center',
       headerTitle: () => (
         <View style={styles.headerTitleContainer}>
-          <Image 
-            source={require('../images/logo.png')} 
-            style={styles.headerLogo} 
-            resizeMode="contain" 
-          />
           <View style={styles.appNameContainer}>
             <Text style={[styles.appNamePart, { color: COLORS.secondary }]}>رفيق </Text>
             <Text style={[styles.appNamePart, { color: COLORS.primary }]}>الذاكرة</Text>

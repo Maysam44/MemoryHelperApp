@@ -20,18 +20,6 @@ export default function AddPersonScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // حالات التسجيل الصوتي
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [recordingUri, setRecordingUri] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (sound) sound.unloadAsync();
-    };
-  }, [sound]);
-
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -54,41 +42,6 @@ export default function AddPersonScreen() {
     }
   };
 
-  async function startRecording() {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('إذن الميكروفون مطلوب', 'نحتاج للوصول للميكروفون لتسجيل الرسالة الصوتية.', [
-          { text: 'إلغاء', style: 'cancel' },
-          { text: 'الإعدادات', onPress: () => Linking.openSettings() }
-        ]);
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setIsRecording(true);
-    } catch (err) {
-      console.error('Failed to start recording', err);
-    }
-  }
-
-  async function stopRecording() {
-    setIsRecording(false);
-    await recording?.stopAndUnloadAsync();
-    const uri = recording?.getURI();
-    setRecordingUri(uri || null);
-    setRecording(null);
-  }
-
-  async function playRecordedAudio() {
-    if (recordingUri) {
-      const { sound } = await Audio.Sound.createAsync({ uri: recordingUri });
-      setSound(sound);
-      await sound.playAsync();
-    }
-  }
-
   const handleAddPerson = async () => {
     if (!name || !relationship) {
       Alert.alert('خطأ', 'يرجى إدخال الاسم وصلة القرابة على الأقل');
@@ -99,14 +52,13 @@ export default function AddPersonScreen() {
     try {
       const user = auth.currentUser;
       if (user) {
-        const personId = Date.now().toString();
+          const personId = Date.now().toString();
         await setDoc(doc(db, "users", user.uid, "memoryBank", personId), {
           id: personId,
           name,
           relation: relationship,
           description,
           imageUri: image,
-          audioUrl: recordingUri,
           createdAt: new Date().toISOString(),
         });
 
@@ -175,26 +127,7 @@ export default function AddPersonScreen() {
             />
           </View>
 
-          <View style={styles.audioSection}>
-            <Text style={[styles.label, { textAlign: 'center', marginBottom: 15 }]}>سجل رسالة صوتية للمريض</Text>
-            <View style={styles.audioButtonsRow}>
-              <TouchableOpacity 
-                style={[styles.audioBtn, { backgroundColor: isRecording ? '#FF5252' : COLORS.primary }]} 
-                onPress={isRecording ? stopRecording : startRecording}
-              >
-                <MaterialCommunityIcons name={isRecording ? "stop" : "microphone"} size={24} color="white" />
-                <Text style={styles.audioBtnText}>{isRecording ? "إيقاف" : "بدء التسجيل"}</Text>
-              </TouchableOpacity>
 
-              {recordingUri && !isRecording && (
-                <TouchableOpacity style={[styles.audioBtn, { backgroundColor: COLORS.secondary }]} onPress={playRecordedAudio}>
-                  <MaterialCommunityIcons name="play" size={24} color="white" />
-                  <Text style={styles.audioBtnText}>تشغيل</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {recordingUri && !isRecording && <Text style={styles.successText}>✓ تم تسجيل الصوت بنجاح</Text>}
-          </View>
 
           <TouchableOpacity 
             style={[styles.submitButton, { backgroundColor: COLORS.primary, opacity: isSubmitting ? 0.7 : 1 }]} 

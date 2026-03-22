@@ -17,12 +17,7 @@ export default function VoiceMemoriesScreen() {
 
   useEffect(() => {
     fetchVoices();
-    // تشغيل التوجيه الصوتي التلقائي
-    const timer = setTimeout(() => {
-      speakGuidance();
-    }, 500);
     return () => {
-      clearTimeout(timer);
       if (sound) sound.unloadAsync();
     };
   }, []);
@@ -35,20 +30,6 @@ export default function VoiceMemoriesScreen() {
       setVoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }
     setLoading(false);
-  };
-
-  // التوجيه الصوتي التلقائي
-  const speakGuidance = async () => {
-    try {
-      const message = 'لديك رسائل صوتية جديدة من أحبائك. اضغط على أي رسالة لسماعها.';
-      await Speech.speak(message, {
-        language: 'ar-SA',
-        rate: 0.85,
-        pitch: 1,
-      });
-    } catch (error) {
-      console.error("Speech error:", error);
-    }
   };
 
   // Haptic Feedback
@@ -71,17 +52,7 @@ export default function VoiceMemoriesScreen() {
     
     if (sound) await sound.unloadAsync();
     
-    // تشغيل رسالة صوتية قبل تشغيل الرسالة
-    try {
-      const message = `تشغيل رسالة من ${senderName || 'أحد أفراد العائلة'}`;
-      await Speech.speak(message, {
-        language: 'ar-SA',
-        rate: 0.85,
-        pitch: 1,
-      });
-    } catch (error) {
-      console.error("Speech error:", error);
-    }
+
 
     const { sound: newSound } = await Audio.Sound.createAsync({ uri });
     setSound(newSound);
@@ -106,6 +77,11 @@ export default function VoiceMemoriesScreen() {
       <View style={styles.headerContainer}>
         <Text style={styles.header}>رسائل أحبابي الصوتية</Text>
         <MaterialCommunityIcons name="microphone" size={40} color={COLORS.primary} />
+      </View>
+
+      <View style={styles.noteContainer}>
+        <MaterialCommunityIcons name="information-outline" size={24} color={COLORS.primary} />
+        <Text style={styles.noteText}>اضغط على الرسالة لسماع صوت أحبائك</Text>
       </View>
 
       {voices.length === 0 ? (
@@ -167,7 +143,25 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   header: { fontSize: 28, fontWeight: 'bold', color: '#333', marginRight: 15 },
-  listContent: { padding: 20, paddingBottom: 40 },
+  noteContainer: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary + '10',
+    padding: 15,
+    margin: 20,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  noteText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginRight: 10,
+    textAlign: 'right',
+  },
+  listContent: { padding: 20, paddingTop: 0, paddingBottom: 40 },
   giantVoiceCard: {
     flexDirection: 'row-reverse',
     alignItems: 'center',

@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import Constants from 'expo-constants';
 
 // إعداد معالج التنبيهات
 Notifications.setNotificationHandler({
@@ -16,15 +15,17 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const NOTIFICATION_TASK_NAME = 'MEDICINE_REMINDER_TASK';
+const MOTIVATION_TASK_NAME = 'DAILY_MOTIVATION_TASK';
 
-// تسجيل المهمة الخلفية للتنبيهات
-if (!TaskManager.isTaskDefined(NOTIFICATION_TASK_NAME)) {
-  TaskManager.defineTask(NOTIFICATION_TASK_NAME, async () => {
-    // هذه المهمة تعمل في الخلفية لإرسال التنبيهات
-    console.log('تنبيه الدواء تم تفعيله في الخلفية');
-  });
-}
+// رسائل تحفيزية عشوائية
+const MOTIVATION_MESSAGES = [
+  "تذكر أننا نحبك دائماً ❤️",
+  "يوم سعيد لك! نحن نفكر فيك 🌸",
+  "أنت شخص رائع، استمتع بيومك ☀️",
+  "رسائل أحبائك بانتظارك، اسمعها الآن 👂",
+  "نحن معك في كل خطوة، لا تنسى ذلك 🤗",
+  "ابتسم! العالم أجمل بابتسامتك 😊"
+];
 
 export const useNotifications = () => {
   const notificationListener = useRef<any>(null);
@@ -45,11 +46,40 @@ export const useNotifications = () => {
       }
     );
 
+    // جدولة الرسائل التحفيزية كل 30 دقيقة عند تشغيل الهوك لأول مرة
+    scheduleMotivationMessages();
+
     return () => {
       notificationListener.current && notificationListener.current.remove();
       responseListener.current && responseListener.current.remove();
     };
   }, []);
+
+  const scheduleMotivationMessages = async () => {
+    try {
+      // التحقق مما إذا كانت مجدولة بالفعل
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      const alreadyScheduled = scheduled.some(n => n.content.data?.type === 'motivation');
+      
+      if (!alreadyScheduled) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '❤️ رسالة حب لك',
+            body: 'تذكر أننا نحبك، ادخل للتطبيق واسمع رسائل أحبائك',
+            data: { type: 'motivation' },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 30 * 60, // كل 30 دقيقة
+            repeats: true,
+          },
+        });
+        console.log('تم جدولة الرسائل التحفيزية كل 30 دقيقة');
+      }
+    } catch (error) {
+      console.error('Error scheduling motivation:', error);
+    }
+  };
 
   const scheduleMedicineReminder = async (
     medicineName: string,
@@ -57,16 +87,9 @@ export const useNotifications = () => {
     description?: string
   ) => {
     try {
-      // تحويل الوقت إلى دقائق من منتصف الليل
       const [hours, minutes] = time.split(':').map(Number);
-      const totalMinutes = hours * 60 + minutes;
-      const now = new Date();
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      const delayInSeconds = Math.max(
-        (totalMinutes - currentMinutes) * 60,
-        60 // تأكد من أن التأخير لا يقل عن دقيقة واحدة
-      );
-
+      
+      // الجدولة اليومية في وقت محدد بدلاً من TIME_INTERVAL المتكرر بشكل خاطئ
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '🏥 حان وقت الدواء',
@@ -80,13 +103,13 @@ export const useNotifications = () => {
           },
         },
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: delayInSeconds,
-          repeats: true, // تكرار يومياً
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: hours,
+          minute: minutes,
         },
       });
 
-      console.log(`تم جدولة تنبيه الدواء: ${medicineName} في الساعة ${time}`);
+      console.log(`تم جدولة تنبيه الدواء اليومي: ${medicineName} في الساعة ${time}`);
     } catch (error) {
       console.error('خطأ في جدولة التنبيه:', error);
     }

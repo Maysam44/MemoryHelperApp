@@ -7,6 +7,7 @@ import { auth, db } from '../../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
+import { useNotifications } from '../hooks/use-notifications';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +19,7 @@ const getArabicDate = () => {
 export default function PatientDashboard() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
+  const { scheduleMedicineReminder } = useNotifications(); // لتفعيل الهوك وجدولة الرسائل التحفيزية
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
@@ -78,9 +80,9 @@ export default function PatientDashboard() {
       
       <View style={styles.topHeader}>
         <TouchableOpacity 
-          onLongPress={() => setShowSwitchModal(true)} 
+          onLongPress={() => router.replace('/caregiver/dashboard')} 
           style={styles.profileBtn}
-          delayLongPress={3000} // ضغطة مطولة 3 ثواني للعودة
+          delayLongPress={2000} // ضغطة مطولة ثانيتين للعودة مباشرة
         >
           {patient?.profileImage ? (
             <Image source={{ uri: patient.profileImage }} style={styles.headerAvatar} />

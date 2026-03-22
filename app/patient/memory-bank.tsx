@@ -64,29 +64,7 @@ const MemoryItem = ({
         </Text>
       )}
 
-      {item.audioUrl && (
-        <TouchableOpacity
-          style={[
-            styles.audioButton,
-            { backgroundColor: COLORS.secondary + '20' },
-          ]}
-          onPress={() => onPlayAudio(item.audioUrl!)}
-        >
-          <MaterialCommunityIcons
-            name="volume-high"
-            size={20}
-            color={COLORS.secondary}
-          />
-          <Text
-            style={[
-              styles.audioButtonText,
-              { color: COLORS.secondary },
-            ]}
-          >
-            استمع إلى الرسالة الصوتية
-          </Text>
-        </TouchableOpacity>
-      )}
+
     </View>
   </View>
 );

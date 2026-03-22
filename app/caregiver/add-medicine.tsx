@@ -7,10 +7,12 @@ import { auth, db } from '../../firebaseConfig';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
+import { useNotifications } from '../hooks/use-notifications';
 
 export default function AddMedicineScreen() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
+  const { scheduleMedicineReminder } = useNotifications();
   
   const [name, setName] = useState('');
   const [hour, setHour] = useState('08');
@@ -52,6 +54,9 @@ export default function AddMedicineScreen() {
 
         const medRef = doc(collection(db, "users", user.uid, "medicines"), medicineId);
         await setDoc(medRef, newMedicine);
+
+        // جدولة التنبيه الفعلي
+        await scheduleMedicineReminder(name, time24, description);
 
         Alert.alert('تم بنجاح', 'تمت إضافة الدواء وجدولة التنبيهات الذكية');
         router.back();
