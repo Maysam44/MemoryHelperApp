@@ -6,7 +6,6 @@ import * as Notifications from 'expo-notifications';
 // إعداد معالج التنبيهات المحلية فقط
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
