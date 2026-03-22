@@ -19,7 +19,7 @@ const getArabicDate = () => {
 export default function PatientDashboard() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
-  const { scheduleMedicineReminder } = useNotifications(); // لتفعيل الهوك وجدولة الرسائل التحفيزية
+  const { scheduleMotivationMessages } = useNotifications(); 
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
@@ -46,7 +46,13 @@ export default function PatientDashboard() {
         setIsLoading(false);
       }
     };
+    
     fetchData();
+    
+    // جدولة الرسائل التحفيزية "مرة واحدة فقط" عند فتح لوحة التحكم
+    // الدالة داخل الهوك تتحقق أصلاً إذا كانت مجدولة مسبقاً
+    scheduleMotivationMessages();
+
     return () => clearInterval(timer);
   }, []);
 

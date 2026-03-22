@@ -2,9 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import * as TaskManager from 'expo-task-manager';
 
-// إعداد معالج التنبيهات
+// إعداد معالج التنبيهات المحلية فقط
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -23,29 +22,30 @@ export const useNotifications = () => {
     // استمع إلى التنبيهات الواردة
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log('تم استقبال تنبيه:', notification);
+        console.log('تم استقبال تنبيه محلي:', notification.request.content.title);
       }
     );
 
-    // استمع إلى استجابات المستخدم للتنبيهات
+    // استمع إلى استجابات المستخدم
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        console.log('استجابة المستخدم للتنبيه:', response);
+        console.log('استجابة المستخدم:', response.notification.request.content.title);
       }
     );
 
-    // جدولة الرسائل التحفيزية كل 10 دقائق عند تشغيل الهوك لأول مرة
-    scheduleMotivationMessages();
-
     return () => {
-      notificationListener.current && notificationListener.current.remove();
-      responseListener.current && responseListener.current.remove();
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
     };
   }, []);
 
+  // دالة لجدولة الرسائل التحفيزية - يتم استدعاؤها يدوياً وليس تلقائياً في useEffect
   const scheduleMotivationMessages = async () => {
     try {
-      // التحقق مما إذا كانت مجدولة بالفعل
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       const alreadyScheduled = scheduled.some(n => n.content.data?.type === 'motivation');
       
@@ -55,10 +55,11 @@ export const useNotifications = () => {
             title: '❤️ رسالة حب لك',
             body: 'تذكر أننا نحبك، ادخل للتطبيق واسمع رسائل أحبائك',
             data: { type: 'motivation' },
+            sound: 'default',
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: 10 * 60, // كل 10 دقائق كما طلب المستخدم
+            seconds: 10 * 60, // كل 10 دقائق
             repeats: true,
           },
         });
@@ -77,7 +78,7 @@ export const useNotifications = () => {
     try {
       const [hours, minutes] = time.split(':').map(Number);
       
-      // إلغاء أي تنبيهات قديمة لنفس الدواء لتجنب التكرار
+      // إلغاء أي تنبيهات قديمة لنفس الدواء لمنع التكرار
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       for (const notification of scheduled) {
         if (notification.content.data?.medicineName === medicineName) {
@@ -85,7 +86,7 @@ export const useNotifications = () => {
         }
       }
 
-      // الجدولة اليومية في وقت محدد بدقة
+      // الجدولة اليومية
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '🏥 حان وقت الدواء',
@@ -105,33 +106,21 @@ export const useNotifications = () => {
         },
       });
 
-      console.log(`تم جدولة تنبيه الدواء اليومي: ${medicineName} في الساعة ${time}`);
+      console.log(`تم جدولة تنبيه الدواء: ${medicineName} في ${time}`);
     } catch (error) {
       console.error('خطأ في جدولة التنبيه:', error);
     }
   };
 
-  const cancelMedicineReminder = async (notificationId: string) => {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(notificationId);
-      console.log('تم إلغاء التنبيه');
-    } catch (error) {
-      console.error('خطأ في إلغاء التنبيه:', error);
-    }
-  };
-
-  const getAllScheduledNotifications = async () => {
-    try {
-      return await Notifications.getAllScheduledNotificationsAsync();
-    } catch (error) {
-      console.error('خطأ في جلب التنبيهات:', error);
-      return [];
-    }
+  const cancelAllNotifications = async () => {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    console.log('تم مسح جميع التنبيهات المجدولة');
   };
 
   return {
     scheduleMedicineReminder,
-    cancelMedicineReminder,
-    getAllScheduledNotifications,
+    scheduleMotivationMessages,
+    cancelAllNotifications,
+    getAllScheduledNotifications: Notifications.getAllScheduledNotificationsAsync,
   };
 };
