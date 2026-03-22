@@ -17,8 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../constants/ThemeContext';
-import { SIZES, FONTS, COLORS } from '../../constants/theme';
+import { SIZES, COLORS } from '../../constants/theme';
 import * as ImagePicker from 'expo-image-picker';
+import Constants from 'expo-constants';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface Message {
   id: string;
@@ -26,11 +28,14 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   imageUri?: string;
+  base64Image?: string; // Store base64 for sending to Gemini
 }
 
-// استخدام OpenAI API كبديل أكثر استقراراً
-const GEMINI_API_URL = "https://api.openai.com/v1/chat/completions";
-const GEMINI_API_KEY = process.env.OPENAI_API_KEY;
+// Get API Key from Expo Constants (recommended way)
+const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || process.env.GEMINI_API_KEY;
+
+// Initialize Google Generative AI
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -57,57 +62,54 @@ export default function AIChatScreen() {
     scrollToBottom();
   }, [messages]);
 
-  const getGeminiResponse = async (userText: string, chatHistory: Message[]): Promise<string> => {
-    if (!GEMINI_API_KEY) {
+  const getGeminiResponse = async (userText: string, imageBase64?: string): Promise<string> => {
+    if (!genAI) {
+      console.error("Gemini API Key is missing!");
       return getFallbackResponse(userText);
     }
 
     try {
-      const conversationMessages = chatHistory.slice(-6).map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-
-      conversationMessages.push({
-        role: 'user',
-        content: userText
+      // Use gemini-1.5-flash for fast and free-tier responses
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'. إذا أرسل المستخدم صورة، حللها بحنان وذكره بذكريات جميلة مرتبطة بمحتواها."
       });
 
-      const requestBody = {
-        model: "gpt-4.1-mini",
-        messages: [
-          {
-            role: 'system',
-            content: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'."
-          },
-          ...conversationMessages
-        ],
-        temperature: 0.8,
-        max_tokens: 300
-      };
-
-      const response = await fetch(GEMINI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GEMINI_API_KEY}`
-        },
-        body: JSON.stringify(requestBody),
+      const chat = model.startChat({
+        history: messages.slice(-10).map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }],
+        })),
       });
 
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      let result;
+      if (imageBase64) {
+        // If there's an image, we use the generative model directly with text and image
+        const prompt = userText || "ماذا ترى في هذه الصورة؟ احكِ لي عنها بحنان.";
+        const imagePart = {
+          inlineData: {
+            data: imageBase64,
+            mimeType: "image/jpeg"
+          }
+        };
+        result = await model.generateContent([prompt, imagePart]);
+      } else {
+        result = await chat.sendMessage(userText);
+      }
 
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content || getFallbackResponse(userText);
+      const response = await result.response;
+      return response.text();
     } catch (error) {
+      console.error("Gemini API Error:", error);
       return getFallbackResponse(userText);
     }
   };
 
   const getFallbackResponse = (userText: string): string => {
-      const userLower = userText.toLowerCase();
-      if (userLower.includes('هاي') || userLower.includes('مرحبا')) return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك؟";
-      return "هذا جميل جداً! أخبرني المزيد، أنا أصغي إليك بكل حب.";
+    const userLower = userText.toLowerCase();
+    if (userLower.includes('هاي') || userLower.includes('مرحبا') || userLower.includes('سلام')) 
+      return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك اليوم؟";
+    return "هذا جميل جداً! أنا معك وأصغي إليك بكل حب. أخبرني المزيد عما يدور في خاطرك.";
   };
 
   const handleSendMessage = async () => {
@@ -127,7 +129,7 @@ export default function AIChatScreen() {
     Keyboard.dismiss();
 
     try {
-      const aiResponseText = await getGeminiResponse(userText, [...messages, userMessage]);
+      const aiResponseText = await getGeminiResponse(userText);
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: aiResponseText,
@@ -145,45 +147,75 @@ export default function AIChatScreen() {
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('عذراً', 'نحتاج لإذن الوصول للمعرض.');
+      Alert.alert('عذراً', 'نحتاج لإذن الوصول للمعرض لمشاركة الصور مع رفيقك.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.5, // Reduced quality for faster API transfer
+      base64: true, // Need base64 for Gemini API
     });
 
     if (!result.canceled && result.assets[0]) {
-      const imageUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const imageUri = asset.uri;
+      const base64Data = asset.base64;
+
       const userMessage: Message = {
         id: Date.now().toString(),
         text: 'شاركت صورة معك',
         sender: 'user',
         timestamp: new Date(),
         imageUri,
+        base64Image: base64Data || undefined,
       };
+
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
-      setTimeout(() => {
+
+      try {
+        const aiResponseText = await getGeminiResponse("حلل هذه الصورة وحدثني عنها بحنان", base64Data || undefined);
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          text: 'يا لها من صورة جميلة جداً! هل تحب أن تحكي لي قصة هذه الصورة؟',
+          text: aiResponseText,
           sender: 'ai',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, aiMessage]);
+      } catch (error) {
+        console.error("Image Analysis Error:", error);
+      } finally {
         setIsLoading(false);
-      }, 1500);
+      }
     }
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer]}>
-      <View style={[styles.messageBubble, item.sender === 'user' ? { backgroundColor: COLORS.primary } : { backgroundColor: 'white', borderWidth: 1, borderColor: '#eee' }]}>
+    <View style={[
+      styles.messageContainer, 
+      item.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer
+    ]}>
+      <View style={[
+        styles.messageBubble, 
+        item.sender === 'user' 
+          ? { backgroundColor: COLORS.primary } 
+          : { backgroundColor: 'white', borderWidth: 1, borderColor: '#eee' }
+      ]}>
         {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
-        <Text style={[styles.messageText, { color: item.sender === 'user' ? 'white' : '#333' }]}>{item.text}</Text>
+        <Text style={[
+          styles.messageText, 
+          { color: item.sender === 'user' ? 'white' : '#333' }
+        ]}>
+          {item.text}
+        </Text>
+        <Text style={[
+          styles.timestampText,
+          { color: item.sender === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }
+        ]}>
+          {item.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+        </Text>
       </View>
     </View>
   );
@@ -199,20 +231,52 @@ export default function AIChatScreen() {
           </TouchableOpacity>
         )
       }} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={90}>
-        <FlatList ref={flatListRef} data={messages} keyExtractor={(item) => item.id} renderItem={renderMessage} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <FlatList 
+          ref={flatListRef} 
+          data={messages} 
+          keyExtractor={(item) => item.id} 
+          renderItem={renderMessage} 
+          contentContainerStyle={styles.listContent} 
+          showsVerticalScrollIndicator={false} 
+        />
+        
         {isLoading && (
           <View style={styles.loadingIndicator}>
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={{ marginRight: 10, color: '#666' }}>الرفيق الذكي يكتب...</Text>
+            <Text style={{ marginRight: 10, color: '#666', fontFamily: Platform.OS === 'ios' ? 'Arial' : 'sans-serif' }}>
+              الرفيق الذكي يفكر...
+            </Text>
           </View>
         )}
+
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
+          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage} disabled={isLoading}>
             <MaterialCommunityIcons name="image-plus" size={26} color={COLORS.primary} />
           </TouchableOpacity>
-          <TextInput style={styles.input} placeholder="اكتب لرفيقك..." value={inputText} onChangeText={setInputText} multiline textAlign="right" />
-          <TouchableOpacity style={[styles.sendButton, { backgroundColor: inputText.trim() ? COLORS.primary : '#ccc' }]} onPress={handleSendMessage} disabled={!inputText.trim() || isLoading}>
+          
+          <TextInput 
+            style={styles.input} 
+            placeholder="اكتب لرفيقك..." 
+            value={inputText} 
+            onChangeText={setInputText} 
+            multiline 
+            textAlign="right"
+            placeholderTextColor="#999"
+          />
+          
+          <TouchableOpacity 
+            style={[
+              styles.sendButton, 
+              { backgroundColor: (inputText.trim() && !isLoading) ? COLORS.primary : '#ccc' }
+            ]} 
+            onPress={handleSendMessage} 
+            disabled={!inputText.trim() || isLoading}
+          >
             <MaterialCommunityIcons name="send" size={24} color="white" />
           </TouchableOpacity>
         </View>
@@ -223,16 +287,58 @@ export default function AIChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 20 },
-  messageContainer: { marginBottom: 20, maxWidth: '85%' },
+  listContent: { padding: 20, paddingBottom: 10 },
+  messageContainer: { marginBottom: 15, maxWidth: '85%' },
   userMessageContainer: { alignSelf: 'flex-start' },
   aiMessageContainer: { alignSelf: 'flex-end' },
-  messageBubble: { padding: 15, borderRadius: 25, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
-  messageText: { fontSize: 18, lineHeight: 26, textAlign: 'right' },
-  messageImage: { width: 220, height: 160, borderRadius: 20, marginBottom: 10 },
+  messageBubble: { 
+    padding: 12, 
+    borderRadius: 20, 
+    elevation: 1, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.05, 
+    shadowRadius: 2,
+    minWidth: 80
+  },
+  messageText: { fontSize: 17, lineHeight: 24, textAlign: 'right' },
+  timestampText: { fontSize: 11, marginTop: 4, textAlign: 'left' },
+  messageImage: { width: 220, height: 160, borderRadius: 15, marginBottom: 8 },
   loadingIndicator: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 10 },
-  inputContainer: { flexDirection: 'row-reverse', alignItems: 'center', padding: 15, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#eee' },
-  attachButton: { width: 45, height: 45, borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', marginLeft: 10, backgroundColor: '#f0f0f0' },
-  input: { flex: 1, borderRadius: 25, paddingHorizontal: 20, paddingVertical: 10, maxHeight: 100, fontSize: 18, backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#eee', textAlign: 'right' },
-  sendButton: { width: 45, height: 45, borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  inputContainer: { 
+    flexDirection: 'row-reverse', 
+    alignItems: 'center', 
+    padding: 12, 
+    backgroundColor: 'white', 
+    borderTopWidth: 1, 
+    borderTopColor: '#eee' 
+  },
+  attachButton: { 
+    width: 45, 
+    height: 45, 
+    borderRadius: 22.5, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginLeft: 10, 
+    backgroundColor: '#f0f0f0' 
+  },
+  input: { 
+    flex: 1, 
+    borderRadius: 20, 
+    paddingHorizontal: 15, 
+    paddingVertical: 8, 
+    maxHeight: 100, 
+    fontSize: 16, 
+    backgroundColor: '#f8f9fa', 
+    borderWidth: 1, 
+    borderColor: '#eee', 
+    textAlign: 'right' 
+  },
+  sendButton: { 
+    width: 45, 
+    height: 45, 
+    borderRadius: 22.5, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 10 
+  },
 });

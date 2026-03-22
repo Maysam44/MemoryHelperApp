@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: { favicon: "./assets/favicon.png" },
   extra: {
-    // تأكد أن هذه الأسماء مطابقة لما هو موجود في ملف .env
+    // تم توحيد أسماء المفاتيح لتطابق الكود
     geminiApiKey: process.env.GEMINI_API_KEY,
     firebaseApiKey: process.env.FIREBASE_API_KEY,
     firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
