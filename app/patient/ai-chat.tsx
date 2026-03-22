@@ -26,23 +26,14 @@ interface Message {
   imageUri?: string;
 }
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // من platform.openai.com
-
 const getAIResponse = async (text: string, retries = 2): Promise<string> => {
   try {
     const response = await fetch(
-      'https://api.openai.com/v1/chat/completions',
+      'https://gemini-api-blue-eight.vercel.app/api/chat',
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini', // رخيص وسريع
-          messages: [{ role: 'user', content: text }],
-          max_tokens: 500,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
       }
     );
 
@@ -57,12 +48,14 @@ const getAIResponse = async (text: string, retries = 2): Promise<string> => {
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content ?? "ما فهمت، ممكن تعيد؟";
+    console.log('Vercel Response:', JSON.stringify(data));
+    return data.reply ?? "ما فهمت، ممكن تعيد؟";
   } catch (error) {
     console.error('Fetch Error:', error);
     return "صار خطأ بسيط، بس أنا معك ❤️";
   }
 };
+
 
 export default function AIChatScreen() {
   const router = useRouter();
