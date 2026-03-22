@@ -62,7 +62,7 @@ export default function AIChatScreen() {
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -83,14 +83,19 @@ export default function AIChatScreen() {
       );
 
       if (!response.ok) {
-        console.error('Gemini API Error:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API Error:', response.status, errorData);
         return "صار خطأ بسيط، بس أنا معك ❤️";
       }
 
       const data = await response.json();
+      console.log('API Response:', data);
       
       if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
         return data.candidates[0].content.parts[0].text;
+      } else if (data.error) {
+        console.error('API Error:', data.error);
+        return "صار خطأ بسيط، بس أنا معك ❤️";
       } else {
         console.error('Unexpected API response:', data);
         return "صار خطأ بسيط، بس أنا معك ❤️";
