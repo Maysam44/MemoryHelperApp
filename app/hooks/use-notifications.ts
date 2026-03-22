@@ -15,18 +15,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const MOTIVATION_TASK_NAME = 'DAILY_MOTIVATION_TASK';
-
-// رسائل تحفيزية عشوائية
-const MOTIVATION_MESSAGES = [
-  "تذكر أننا نحبك دائماً ❤️",
-  "يوم سعيد لك! نحن نفكر فيك 🌸",
-  "أنت شخص رائع، استمتع بيومك ☀️",
-  "رسائل أحبائك بانتظارك، اسمعها الآن 👂",
-  "نحن معك في كل خطوة، لا تنسى ذلك 🤗",
-  "ابتسم! العالم أجمل بابتسامتك 😊"
-];
-
 export const useNotifications = () => {
   const notificationListener = useRef<any>(null);
   const responseListener = useRef<any>(null);
@@ -46,7 +34,7 @@ export const useNotifications = () => {
       }
     );
 
-    // جدولة الرسائل التحفيزية كل 30 دقيقة عند تشغيل الهوك لأول مرة
+    // جدولة الرسائل التحفيزية كل 10 دقائق عند تشغيل الهوك لأول مرة
     scheduleMotivationMessages();
 
     return () => {
@@ -70,11 +58,11 @@ export const useNotifications = () => {
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: 30 * 60, // كل 30 دقيقة
+            seconds: 10 * 60, // كل 10 دقائق كما طلب المستخدم
             repeats: true,
           },
         });
-        console.log('تم جدولة الرسائل التحفيزية كل 30 دقيقة');
+        console.log('تم جدولة الرسائل التحفيزية كل 10 دقائق');
       }
     } catch (error) {
       console.error('Error scheduling motivation:', error);
@@ -89,7 +77,15 @@ export const useNotifications = () => {
     try {
       const [hours, minutes] = time.split(':').map(Number);
       
-      // الجدولة اليومية في وقت محدد بدلاً من TIME_INTERVAL المتكرر بشكل خاطئ
+      // إلغاء أي تنبيهات قديمة لنفس الدواء لتجنب التكرار
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notification of scheduled) {
+        if (notification.content.data?.medicineName === medicineName) {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        }
+      }
+
+      // الجدولة اليومية في وقت محدد بدقة
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '🏥 حان وقت الدواء',

@@ -23,7 +23,7 @@ export default function PatientDashboard() {
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
-  const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [showProfileInfo, setShowProfileInfo] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -49,6 +49,27 @@ export default function PatientDashboard() {
     fetchData();
     return () => clearInterval(timer);
   }, []);
+
+  const handleProfilePress = () => {
+    setShowProfileInfo(true);
+  };
+
+  const handleLongPress = () => {
+    Alert.alert(
+      'تأكيد الانتقال',
+      'هل أنت مقدم الرعاية وتود الانتقال إلى لوحة التحكم؟',
+      [
+        {
+          text: 'إلغاء',
+          style: 'cancel',
+        },
+        {
+          text: 'نعم، انتقل',
+          onPress: () => router.replace('/caregiver/dashboard'),
+        },
+      ]
+    );
+  };
 
   const PatientBox = ({ title, icon, color, onPress, subtitle }: any) => (
     <TouchableOpacity 
@@ -80,9 +101,10 @@ export default function PatientDashboard() {
       
       <View style={styles.topHeader}>
         <TouchableOpacity 
-          onLongPress={() => router.replace('/caregiver/dashboard')} 
+          onPress={handleProfilePress}
+          onLongPress={handleLongPress} 
           style={styles.profileBtn}
-          delayLongPress={2000} // ضغطة مطولة ثانيتين للعودة مباشرة
+          delayLongPress={2000} 
         >
           {patient?.profileImage ? (
             <Image source={{ uri: patient.profileImage }} style={styles.headerAvatar} />
@@ -124,24 +146,67 @@ export default function PatientDashboard() {
         </View>
       </ScrollView>
 
-      {/* Secret Switch Modal */}
-      <Modal visible={showSwitchModal} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSwitchModal(false)}>
+      {/* Profile Info Modal */}
+      <Modal visible={showProfileInfo} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <MaterialCommunityIcons name="shield-account-outline" size={50} color={COLORS.primary} />
-            <Text style={styles.modalTitle}>تأكيد الهوية</Text>
-            <Text style={styles.modalSubtitle}>هل أنت مقدم الرعاية وتود العودة للوحة التحكم؟</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>بياناتي الشخصية</Text>
+              <TouchableOpacity onPress={() => setShowProfileInfo(false)}>
+                <MaterialCommunityIcons name="close" size={28} color={COLORS.textDark} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.infoAvatarContainer}>
+                {patient?.profileImage ? (
+                  <Image source={{ uri: patient.profileImage }} style={styles.infoAvatar} />
+                ) : (
+                  <View style={[styles.infoAvatar, { backgroundColor: COLORS.primary + '10' }]}>
+                    <MaterialCommunityIcons name="account" size={60} color={COLORS.primary} />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>الاسم:</Text>
+                <Text style={styles.infoValue}>{patient?.name}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>العمر:</Text>
+                <Text style={styles.infoValue}>{patient?.age} سنة</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>الوظيفة:</Text>
+                <Text style={styles.infoValue}>{patient?.job || 'غير محدد'}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>الأشياء التي أحبها:</Text>
+                <Text style={styles.infoValue}>{patient?.likes || 'غير محدد'}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>معلومات إضافية:</Text>
+                <Text style={styles.infoValue}>{patient?.additionalInfo || 'لا يوجد'}</Text>
+              </View>
+
+              <View style={styles.switchTip}>
+                <MaterialCommunityIcons name="information" size={20} color={COLORS.primary} />
+                <Text style={styles.tipText}>للعودة لصفحة مقدم الرعاية، اضغط مطولاً على صورتك لمدة ثانيتين.</Text>
+              </View>
+            </ScrollView>
+
             <TouchableOpacity 
-              style={[styles.modalBtn, { backgroundColor: COLORS.primary }]}
-              onPress={() => { setShowSwitchModal(false); router.replace('/caregiver/dashboard'); }}
+              style={[styles.closeBtn, { backgroundColor: COLORS.primary }]} 
+              onPress={() => setShowProfileInfo(false)}
             >
-              <Text style={styles.modalBtnText}>نعم، عودة للوحة التحكم</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalBtn} onPress={() => setShowSwitchModal(false)}>
-              <Text style={[styles.modalBtnText, { color: COLORS.textMuted }]}>إلغاء</Text>
+              <Text style={styles.closeBtnText}>رجوع</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -167,9 +232,16 @@ const styles = StyleSheet.create({
   boxTitle: { fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
   boxSubtitle: { fontSize: 13, textAlign: 'center', marginTop: 6 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: 'white', width: '85%', padding: 30, borderRadius: 30, alignItems: 'center' },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', marginTop: 15, color: COLORS.textDark },
-  modalSubtitle: { fontSize: 18, color: COLORS.textMuted, textAlign: 'center', marginVertical: 20, lineHeight: 26 },
-  modalBtn: { width: '100%', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
-  modalBtnText: { fontSize: 18, fontWeight: 'bold', color: 'white' },
+  modalContent: { backgroundColor: 'white', width: '90%', maxHeight: '80%', padding: 25, borderRadius: 30 },
+  modalHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textDark },
+  infoAvatarContainer: { alignItems: 'center', marginBottom: 20 },
+  infoAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: COLORS.primary + '20' },
+  infoRow: { marginBottom: 15, alignItems: 'flex-end' },
+  infoLabel: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
+  infoValue: { fontSize: 18, color: COLORS.textDark, textAlign: 'right' },
+  switchTip: { flexDirection: 'row-reverse', backgroundColor: COLORS.primary + '10', padding: 12, borderRadius: 12, marginTop: 10, alignItems: 'center' },
+  tipText: { flex: 1, marginRight: 8, fontSize: 14, color: COLORS.primary, textAlign: 'right' },
+  closeBtn: { marginTop: 20, padding: 15, borderRadius: 15, alignItems: 'center' },
+  closeBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 });
