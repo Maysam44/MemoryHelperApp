@@ -1,354 +1,154 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, Image, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert, Image, Dimensions, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import * as Speech from 'expo-speech';
-import * as Notifications from 'expo-notifications';
+import { auth, db } from '../../firebaseConfig';
+import { collection, query, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useTheme } from '../../constants/ThemeContext';
 import { SIZES, FONTS, COLORS } from '../../constants/theme';
-import { auth, db } from '../../firebaseConfig';
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
 
 const { width, height } = Dimensions.get('window');
-const CREAM_WHITE = '#FFFBF0';
-
-interface Medicine {
-  id: string;
-  name: string;
-  time: string;
-  description: string;
-  dosage: string;
-  frequency: string;
-  image?: string;
-  taken?: boolean;
-  takenAt?: string;
-}
-
-// إعداد الإشعارات
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 export default function MedicineRemindersScreen() {
   const router = useRouter();
   const { dynamicColors } = useTheme();
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [medicines, setMedicines] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentMedicineIndex, setCurrentMedicineIndex] = useState(0);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [notificationTimers, setNotificationTimers] = useState<{ [key: string]: NodeJS.Timeout[] }>({});
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    fetchMedicines();
-    return () => {
-      // تنظيف المؤقتات عند الخروج
-      Object.values(notificationTimers).forEach(timers => {
-        timers.forEach(timer => clearTimeout(timer));
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // جلب اسم المستخدم
+    getDoc(doc(db, "users", user.uid)).then(snap => {
+      if (snap.exists()) setUserName(snap.data().patient?.name || '');
+    });
+
+    const q = query(collection(db, "users", user.uid, "medicines"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // منطق اليوم: تصفير حالة الأدوية يومياً
+      const today = new Date().toDateString();
+      const updatedMeds = meds.map(med => {
+        if (med.lastTakenDate !== today) {
+          return { ...med, status: 'pending' };
+        }
+        return med;
       });
-    };
+      
+      setMedicines(updatedMeds.sort((a, b) => a.time.localeCompare(b.time)));
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    // تشغيل التوجيه الصوتي عند تحميل الدواء الحالي
-    if (medicines.length > 0 && !isLoading) {
-      const currentMedicine = medicines[currentMedicineIndex];
-      if (!currentMedicine.taken) {
-        speakCurrentMedicine(currentMedicine);
-        scheduleNotifications(currentMedicine);
-      }
-    }
-  }, [currentMedicineIndex, medicines, isLoading]);
-
-  const fetchMedicines = async () => {
+  const handleTakeMedicine = async (medicine: any) => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const medicinesRef = collection(db, `users/${user.uid}/medicines`);
-        const snapshot = await getDocs(medicinesRef);
-        const fetchedMedicines: Medicine[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          fetchedMedicines.push({ 
-            id: doc.id, 
-            ...data,
-            taken: data.taken || false,
-          } as Medicine);
-        });
-        // ترتيب الأدوية حسب الوقت
-        fetchedMedicines.sort((a, b) => a.time.localeCompare(b.time));
-        setMedicines(fetchedMedicines);
-      }
-    } catch (error) {
-      console.error('Error fetching medicines:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (!user) return;
 
-  // التوجيه الصوتي التلقائي
-  const speakCurrentMedicine = async (medicine: Medicine) => {
-    try {
-      const message = `حان وقت دواء ${medicine.name}. الجرعة: ${medicine.dosage}. اضغط على الزر الأخضر الكبير عندما تأخذ الدواء.`;
-      await Speech.speak(message, {
-        language: 'ar-SA',
-        rate: 0.85,
-        pitch: 1,
-      });
-    } catch (error) {
-      console.error("Speech error:", error);
-    }
-  };
-
-  // جدولة الإشعارات الذكية
-  const scheduleNotifications = async (medicine: Medicine) => {
-    try {
-      const [hours, minutes] = medicine.time.split(':').map(Number);
-      const now = new Date();
-      const medicineTime = new Date();
-      medicineTime.setHours(hours, minutes, 0);
-
-      const timers: NodeJS.Timeout[] = [];
-
-      // إشعار قبل 5 دقائق
-      const fiveMinutesBefore = new Date(medicineTime.getTime() - 5 * 60000);
-      if (fiveMinutesBefore > now) {
-        const delay = fiveMinutesBefore.getTime() - now.getTime();
-        const timer = setTimeout(async () => {
-          await sendNotification(`تنبيه: سيحين موعد دواء ${medicine.name} بعد 5 دقائق`);
-        }, delay);
-        timers.push(timer);
-      }
-
-      // إشعار عند الموعد المحدد
-      if (medicineTime > now) {
-        const delay = medicineTime.getTime() - now.getTime();
-        const timer = setTimeout(async () => {
-          await sendNotification(`حان موعد دواء ${medicine.name} الآن!`);
-          // تكرار الإشعار كل 5 دقائق حتى يؤكد المريض تناول الدواء
-          repeatNotification(medicine, timers);
-        }, delay);
-        timers.push(timer);
-      }
-
-      setNotificationTimers(prev => ({
-        ...prev,
-        [medicine.id]: timers
-      }));
-    } catch (error) {
-      console.error("Notification scheduling error:", error);
-    }
-  };
-
-  // تكرار الإشعار كل 5 دقائق
-  const repeatNotification = (medicine: Medicine, timers: NodeJS.Timeout[]) => {
-    const repeatTimer = setInterval(async () => {
-      // التحقق من عدم تناول الدواء بعد
-      const currentMedicine = medicines.find(m => m.id === medicine.id);
-      if (currentMedicine && !currentMedicine.taken) {
-        await sendNotification(`تذكير: لم تأخذ دواء ${medicine.name} بعد. اضغط على الزر الأخضر.`);
-      } else {
-        clearInterval(repeatTimer);
-      }
-    }, 5 * 60000); // كل 5 دقائق
-
-    timers.push(repeatTimer as any);
-  };
-
-  // إرسال الإشعار
-  const sendNotification = async (message: string) => {
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'رفيق الذاكرة',
-          body: message,
-          sound: true,
-        },
-        trigger: null, // إرسال فوري
-      });
-    } catch (error) {
-      console.error("Error sending notification:", error);
-    }
-  };
-
-  // Haptic Feedback
-  const triggerHaptic = async () => {
-    try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error("Haptic error:", error);
-    }
-  };
-
-  const handleMedicineTaken = async () => {
-    triggerHaptic();
-    const currentMedicine = medicines[currentMedicineIndex];
-    
-    try {
-      // تحديث قاعدة البيانات
-      const medicineRef = doc(db, `users/${auth.currentUser?.uid}/medicines`, currentMedicine.id);
-      await updateDoc(medicineRef, {
-        taken: true,
-        takenAt: new Date().toISOString(),
-      });
-
-      // تحديث الحالة المحلية
-      const updatedMedicines = [...medicines];
-      updatedMedicines[currentMedicineIndex].taken = true;
-      setMedicines(updatedMedicines);
-
-      setShowConfirmation(true);
+      const today = new Date().toDateString();
+      const medRef = doc(db, "users", user.uid, "medicines", medicine.id);
       
-      await Speech.speak('تم تسجيل تناول الدواء. شكراً لك!', {
-        language: 'ar-SA',
-        rate: 0.85,
+      await updateDoc(medRef, {
+        status: 'taken',
+        lastTakenDate: today
       });
 
-      // الانتقال للدواء التالي غير المأخوذ بعد 2 ثانية
-      setTimeout(() => {
-        setShowConfirmation(false);
-        const nextIndex = updatedMedicines.findIndex((m, idx) => idx > currentMedicineIndex && !m.taken);
-        
-        if (nextIndex !== -1) {
-          setCurrentMedicineIndex(nextIndex);
-        } else {
-          // إذا انتهت جميع الأدوية
-          Alert.alert('تم!', 'لقد أخذت جميع أدويتك اليوم. ممتاز!');
-          router.back();
-        }
-      }, 2000);
+      Alert.alert('أحسنت!', 'تم تسجيل أخذ الدواء بنجاح. بارك الله في صحتك.');
     } catch (error) {
-      console.error("Error updating medicine:", error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الدواء');
+      console.error("Error updating medicine status:", error);
     }
   };
 
   if (isLoading) {
     return (
-      <View style={[styles.centered, { backgroundColor: CREAM_WHITE }]}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 20, color: '#666', fontSize: 18 }}>جاري تحميل أدويتك...</Text>
       </View>
     );
   }
 
-  // تصفية الأدوية غير المأخوذة
-  const unfinishedMedicines = medicines.filter(m => !m.taken);
-
-  if (unfinishedMedicines.length === 0) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: CREAM_WHITE }]}>
-        <Stack.Screen options={{ title: 'مواعيد أدويتي', headerTitleAlign: 'center' }} />
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="check-circle" size={120} color="#55E6C1" />
-          <Text style={[styles.emptyText, { color: '#333' }]}>ممتاز!</Text>
-          <Text style={[styles.emptySubText, { color: '#666' }]}>لقد أخذت جميع أدويتك اليوم</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const currentMedicine = unfinishedMedicines[0];
+  const pendingMeds = medicines.filter(m => m.status === 'pending');
+  const takenMeds = medicines.filter(m => m.status === 'taken');
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: CREAM_WHITE }]}>
-      <Stack.Screen options={{ title: 'مواعيد أدويتي', headerTitleAlign: 'center' }} />
-      
-      <View style={styles.progressContainer}>
-        <Text style={[styles.progressText, { color: '#333' }]}>
-          الدواء {medicines.findIndex(m => m.id === currentMedicine.id) + 1} من {medicines.length}
-        </Text>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { 
-                width: `${((medicines.findIndex(m => m.id === currentMedicine.id) + 1) / medicines.length) * 100}%`,
-                backgroundColor: COLORS.primary
-              }
-            ]} 
-          />
-        </View>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#F8F9FD' }]}>
+      <Stack.Screen options={{ 
+        title: 'مواعيد أدويتي', 
+        headerTitleAlign: 'center',
+        headerLeft: () => (
+          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 15 }}>
+            <MaterialCommunityIcons name="arrow-right" size={32} color={COLORS.primary} />
+          </TouchableOpacity>
+        )
+      }} />
 
-      <View style={styles.mainContent}>
-        {/* عرض الدواء الحالي فقط بحجم عملاق */}
-        <View style={[styles.giantMedicineCard, { backgroundColor: '#55E6C1' }]}>
-          {/* أيقونة علبة الدواء الكبيرة */}
-          <View style={styles.giantMedicineIconContainer}>
-            <MaterialCommunityIcons name="pill-multiple" size={100} color="white" />
-          </View>
-
-          {/* اسم الدواء بحجم كبير جداً */}
-          <Text style={styles.giantMedicineName}>{currentMedicine.name}</Text>
-
-          {/* الجرعة */}
-          <View style={styles.giantDosageContainer}>
-            <Text style={styles.giantDosageLabel}>الجرعة:</Text>
-            <Text style={styles.giantDosageValue}>{currentMedicine.dosage}</Text>
-          </View>
-
-          {/* الوقت */}
-          <View style={styles.giantTimeContainer}>
-            <MaterialCommunityIcons name="clock-outline" size={40} color="white" />
-            <Text style={styles.giantTimeText}>{currentMedicine.time}</Text>
-          </View>
-
-          {/* الوصف */}
-          {currentMedicine.description && (
-            <Text style={styles.giantDescription}>{currentMedicine.description}</Text>
-          )}
-        </View>
-
-        {/* زر "تم الأخذ" الضخم */}
-        <TouchableOpacity 
-          style={[styles.giantConfirmButton, { backgroundColor: COLORS.primary }]}
-          onPress={handleMedicineTaken}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="check-circle" size={60} color="white" />
-          <Text style={styles.giantConfirmButtonText}>تم الأخذ</Text>
-        </TouchableOpacity>
-
-        {/* قائمة الأدوية الأخرى الصغيرة */}
-        {unfinishedMedicines.length > 1 && (
-          <View style={styles.otherMedicinesContainer}>
-            <Text style={[styles.otherMedicinesTitle, { color: '#333' }]}>الأدوية الأخرى اليوم:</Text>
-            <FlatList
-              data={unfinishedMedicines.slice(1)}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View style={[styles.smallMedicineCard, { backgroundColor: 'white' }]}>
-                  <MaterialCommunityIcons name="pill" size={30} color={COLORS.primary} />
-                  <View style={styles.smallMedicineInfo}>
-                    <Text style={[styles.smallMedicineName, { color: '#333' }]}>{item.name}</Text>
-                    <Text style={[styles.smallMedicineTime, { color: '#666' }]}>{item.time} • {item.dosage}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* قسم الأدوية الحالية - تصميم عملاق */}
+        {pendingMeds.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>أدوية يجب أخذها الآن:</Text>
+            {pendingMeds.map((med) => (
+              <View key={med.id} style={styles.giantCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.timeBadge}>
+                    <MaterialCommunityIcons name="clock-outline" size={24} color="white" />
+                    <Text style={styles.timeBadgeText}>{med.displayTime || med.time}</Text>
                   </View>
+                  <Text style={styles.medName}>{med.name}</Text>
                 </View>
-              )}
-              scrollEnabled={false}
-            />
+                
+                <View style={styles.cardBody}>
+                  <View style={styles.infoBox}>
+                    <Text style={styles.infoLabel}>الجرعة المطلوبة:</Text>
+                    <Text style={styles.infoValue}>{med.dosage || 'حسب تعليمات الطبيب'}</Text>
+                  </View>
+                  {med.description && (
+                    <View style={styles.infoBox}>
+                      <Text style={styles.infoLabel}>ملاحظة مهمة:</Text>
+                      <Text style={styles.infoValue}>{med.description}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.confirmBtn}
+                  onPress={() => handleTakeMedicine(med)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="check-circle-outline" size={40} color="white" />
+                  <Text style={styles.confirmBtnText}>لقد شربت الدواء</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="check-decagram" size={100} color="#4CAF50" />
+            <Text style={styles.emptyTitle}>ممتاز يا {userName}!</Text>
+            <Text style={styles.emptySub}>لقد أخذت جميع أدويتك المجدولة حتى الآن.</Text>
           </View>
         )}
-      </View>
 
-      {/* مودال التأكيد */}
-      <Modal visible={showConfirmation} transparent animationType="fade">
-        <View style={styles.confirmationOverlay}>
-          <View style={styles.confirmationContent}>
-            <MaterialCommunityIcons name="check-circle" size={100} color="#55E6C1" />
-            <Text style={styles.confirmationTitle}>ممتاز!</Text>
-            <Text style={styles.confirmationSubtitle}>تم تسجيل تناول الدواء</Text>
+        {/* قسم الأدوية التي تم أخذها */}
+        {takenMeds.length > 0 && (
+          <View style={[styles.section, { marginTop: 30 }]}>
+            <Text style={[styles.sectionTitle, { color: '#666' }]}>أدوية تم أخذها اليوم:</Text>
+            {takenMeds.map((med) => (
+              <View key={med.id} style={styles.takenCard}>
+                <MaterialCommunityIcons name="check-circle" size={24} color="#4CAF50" />
+                <Text style={styles.takenText}>{med.name}</Text>
+                <Text style={styles.takenTime}>{med.displayTime || med.time}</Text>
+              </View>
+            ))}
           </View>
-        </View>
-      </Modal>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -356,62 +156,24 @@ export default function MedicineRemindersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  progressContainer: { paddingHorizontal: 20, paddingVertical: 15 },
-  progressText: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-  progressBar: { height: 12, backgroundColor: '#eee', borderRadius: 6, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 6 },
-  mainContent: { flex: 1, paddingHorizontal: 15, paddingVertical: 20, justifyContent: 'space-between' },
-  giantMedicineCard: {
-    borderRadius: 35,
-    padding: 30,
-    alignItems: 'center',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    minHeight: 320,
-    justifyContent: 'center',
-  },
-  giantMedicineIconContainer: { marginBottom: 25 },
-  giantMedicineName: { fontSize: 36, fontWeight: 'bold', color: 'white', textAlign: 'center', marginBottom: 25 },
-  giantDosageContainer: { alignItems: 'center', marginBottom: 20 },
-  giantDosageLabel: { fontSize: 18, color: 'rgba(255,255,255,0.8)', marginBottom: 5 },
-  giantDosageValue: { fontSize: 32, fontWeight: 'bold', color: 'white' },
-  giantTimeContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  giantTimeText: { fontSize: 28, fontWeight: 'bold', color: 'white', marginLeft: 10 },
-  giantDescription: { fontSize: 16, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginTop: 15 },
-  giantConfirmButton: {
-    borderRadius: 30,
-    paddingVertical: 30,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    minHeight: 140,
-    marginVertical: 20,
-  },
-  giantConfirmButtonText: { fontSize: 28, fontWeight: 'bold', color: 'white', marginTop: 15 },
-  otherMedicinesContainer: { marginTop: 20 },
-  otherMedicinesTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  smallMedicineCard: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    padding: 15,
-    borderRadius: 20,
-    marginBottom: 10,
-    elevation: 2,
-  },
-  smallMedicineInfo: { flex: 1, marginRight: 15, alignItems: 'flex-end' },
-  smallMedicineName: { fontSize: 16, fontWeight: 'bold' },
-  smallMedicineTime: { fontSize: 14, marginTop: 4 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontSize: 28, fontWeight: 'bold', marginTop: 20, textAlign: 'center' },
-  emptySubText: { fontSize: 18, marginTop: 10, textAlign: 'center' },
-  confirmationOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  confirmationContent: { backgroundColor: 'white', padding: 40, borderRadius: 40, alignItems: 'center' },
-  confirmationTitle: { fontSize: 32, fontWeight: 'bold', color: '#55E6C1', marginTop: 20 },
-  confirmationSubtitle: { fontSize: 18, color: '#666', marginTop: 10 },
+  scrollContent: { padding: 20 },
+  section: { width: '100%' },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.primary, marginBottom: 15, textAlign: 'right' },
+  giantCard: { backgroundColor: 'white', borderRadius: 35, elevation: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, overflow: 'hidden', marginBottom: 25, borderWidth: 2, borderColor: COLORS.secondary + '30' },
+  cardHeader: { backgroundColor: COLORS.secondary, padding: 25, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  medName: { color: 'white', fontSize: 28, fontWeight: 'bold', flex: 1, textAlign: 'right', marginRight: 15 },
+  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
+  timeBadgeText: { color: 'white', fontSize: 16, fontWeight: 'bold', marginLeft: 5 },
+  cardBody: { padding: 25 },
+  infoBox: { marginBottom: 15, alignItems: 'flex-end' },
+  infoLabel: { fontSize: 16, color: '#888', marginBottom: 5 },
+  infoValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.textDark, textAlign: 'right' },
+  confirmBtn: { backgroundColor: '#4CAF50', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 25 },
+  confirmBtnText: { color: 'white', fontSize: 24, fontWeight: 'bold', marginRight: 15 },
+  takenCard: { backgroundColor: '#f0f0f0', padding: 15, borderRadius: 20, flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10, opacity: 0.8 },
+  takenText: { flex: 1, textAlign: 'right', marginRight: 10, fontSize: 18, color: '#666', fontWeight: 'bold' },
+  takenTime: { fontSize: 14, color: '#999' },
+  emptyState: { alignItems: 'center', marginTop: 50, padding: 30, backgroundColor: 'white', borderRadius: 30 },
+  emptyTitle: { fontSize: 26, fontWeight: 'bold', color: '#333', marginTop: 20 },
+  emptySub: { fontSize: 18, color: '#666', textAlign: 'center', marginTop: 10, lineHeight: 26 },
 });

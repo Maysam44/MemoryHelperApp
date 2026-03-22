@@ -11,7 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 type FormItem = 
   | { type: 'header'; title: string; icon: string }
   | { type: 'image-picker'; label: string; value: string | null; setter: (uri: string) => void }
-  | { type: 'input'; label: string; value: string; setter: (text: string) => void; placeholder: string; keyboard?: 'default' | 'number-pad' }
+  | { type: 'input'; label: string; value: string; setter: (text: string) => void; placeholder: string; keyboard?: 'default' | 'number-pad'; multiline?: boolean }
   | { type: 'divider' }
   | { type: 'toggle'; label: string; value: 'early' | 'mid' | 'late' | null; setter: (value: 'early' | 'mid' | 'late') => void };
 
@@ -82,7 +82,7 @@ export default function InitialSetupScreen() {
     { type: 'input', label: 'وظيفته السابقة/الحالية', value: patientJob, setter: setPatientJob, placeholder: 'مثال: معلم متقاعد' },
     { type: 'input', label: 'العمر', value: patientAge, setter: setPatientAge, placeholder: 'مثال: 75', keyboard: 'number-pad' },
     { type: 'toggle', label: 'مرحلة ضعف الذاكرة', value: memoryStage, setter: setMemoryStage },
-    { type: 'input', label: 'معلومات إضافية تهمنا', value: additionalInfo, setter: setAdditionalInfo, placeholder: 'أي ملاحظات أخرى تود إضافتها...' },
+    { type: 'input', label: 'معلومات إضافية تهمنا', value: additionalInfo, setter: setAdditionalInfo, placeholder: 'أي ملاحظات أخرى تود إضافتها...', multiline: true },
   ];
 
   const handleFinishSetup = async () => {
@@ -120,13 +120,6 @@ export default function InitialSetupScreen() {
           profileImage: patientImage,
           additionalInfo: additionalInfo
         },
-        // للحفاظ على التوافق مع الشاشات التي تستخدم الحقول المسطحة
-        name: caregiverName,
-        relationship: caregiverRelationship,
-        profileImage: caregiverImage,
-        patientName: patientName,
-        patientAge: ageNum,
-        patientStage: memoryStage,
         createdAt: new Date(),
       };
       await setDoc(doc(db, "users", user.uid), setupData);
@@ -169,14 +162,14 @@ export default function InitialSetupScreen() {
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>{item.label}</Text>
             <TextInput 
-              style={styles.input} 
+              style={[styles.input, item.multiline && styles.multilineInput]} 
               value={item.value} 
               onChangeText={item.setter} 
               placeholder={item.placeholder} 
               keyboardType={item.keyboard || 'default'} 
               placeholderTextColor={COLORS.textMuted}
-              multiline={item.label.includes('معلومات إضافية')}
-              numberOfLines={item.label.includes('معلومات إضافية') ? 3 : 1}
+              multiline={item.multiline}
+              numberOfLines={item.multiline ? 3 : 1}
             />
           </View>
         );
@@ -258,6 +251,7 @@ const styles = StyleSheet.create({
     inputWrapper: { marginBottom: SIZES.padding },
     label: { fontSize: SIZES.body, color: COLORS.textDark, marginBottom: SIZES.base, textAlign: 'right', fontWeight: FONTS.medium },
     input: { backgroundColor: COLORS.card, padding: SIZES.padding * 0.75, borderRadius: SIZES.radius, fontSize: SIZES.body, borderColor: COLORS.border, borderWidth: 1, textAlign: 'right', color: COLORS.textDark },
+    multilineInput: { height: 100, textAlignVertical: 'top', paddingTop: SIZES.padding * 0.75 },
     divider: { height: 1, backgroundColor: COLORS.border, marginVertical: SIZES.padding, opacity: 0.5 },
     toggleContainer: { flexDirection: 'row-reverse', justifyContent: 'space-around' },
     toggleButton: { flex: 1, padding: SIZES.padding * 0.75, borderRadius: SIZES.radius, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', marginHorizontal: SIZES.base / 2, backgroundColor: COLORS.card },

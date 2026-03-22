@@ -1,66 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { auth, db } from '../../firebaseConfig';
-import { doc, setDoc } from 'firebase/firestore';
-import { useTheme } from '../../constants/ThemeContext';
-import { SIZES, FONTS, COLORS } from '../../constants/theme';
 import * as Location from 'expo-location';
+import { auth, db } from '../../firebaseConfig';
+import { doc, setDoc, collection } from 'firebase/firestore';
+import { COLORS, SIZES, FONTS } from '../../constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function AddSafeZoneScreen() {
   const router = useRouter();
-  const { dynamicColors } = useTheme();
-  
   const [name, setName] = useState('');
-  const [radius, setRadius] = useState('100');
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
+  const [radius, setRadius] = useState('500'); // نصف القطر بالأمتار
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  useEffect(() => {
-    requestLocationPermission();
-  }, []);
-
-  const requestLocationPermission = async () => {
-    setIsLoadingLocation(true);
+  const getCurrentLocation = async () => {
+    setIsLocating(true);
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'إذن الموقع مطلوب',
-          'نحتاج للوصول إلى موقعك لتحديد المنطقة الآمنة. يرجى تفعيل الإذن من الإعدادات.',
-          [{ text: 'إلغاء', style: 'cancel' }, { text: 'الإعدادات', onPress: () => Linking.openSettings() }]
-        );
-        setIsLoadingLocation(false);
+        Alert.alert('إذن الموقع', 'نحتاج لإذن الوصول للموقع لتحديد المنطقة الآمنة.');
+        setIsLocating(false);
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLatitude(location.coords.latitude);
-      setLongitude(location.coords.longitude);
+      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setLocation(loc);
+      Alert.alert('تم التحديد', 'تم التقاط إحداثيات موقعك الحالي بنجاح.');
     } catch (error) {
-      console.error("Error getting location:", error);
-      Alert.alert('خطأ', 'تعذر الحصول على الموقع الحالي.');
+      console.error("Location error:", error);
+      Alert.alert('خطأ', 'فشل في جلب الموقع الحالي.');
     } finally {
-      setIsLoadingLocation(false);
+      setIsLocating(false);
     }
   };
 
-  const openGoogleMaps = () => {
-    // فتح خرائط قوقل للبحث عن موقع
-    const url = Platform.select({
-      ios: 'maps://app',
-      android: 'https://www.google.com/maps',
-    });
-    if (url) Linking.openURL(url);
-  };
-
-  const handleAddSafeZone = async () => {
-    if (!name.trim() || latitude === null || longitude === null) {
-      Alert.alert('خطأ', 'يرجى إدخال اسم المنطقة والتأكد من تحديد الإحداثيات');
+  const handleSaveZone = async () => {
+    if (!name.trim() || !location) {
+      Alert.alert('حقول ناقصة', 'يرجى إدخال اسم للمنطقة والتقاط الموقع الحالي.');
       return;
     }
 
@@ -72,143 +53,134 @@ export default function AddSafeZoneScreen() {
         const newZone = {
           id: zoneId,
           name,
-          latitude,
-          longitude,
-          radius: parseInt(radius) || 100,
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          radius: parseInt(radius),
           createdAt: new Date().toISOString(),
         };
 
-        await setDoc(doc(db, "users", user.uid, "safeZones", zoneId), newZone);
-
-        Alert.alert('تم بنجاح', 'تمت إضافة المنطقة الآمنة بنجاح');
+        await setDoc(doc(collection(db, "users", user.uid, "safeZones"), zoneId), newZone);
+        Alert.alert('تم الحفظ', 'تمت إضافة المنطقة الآمنة بنجاح.');
         router.back();
       }
     } catch (error) {
-      console.error("Error adding safe zone:", error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء حفظ البيانات');
+      console.error("Save zone error:", error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء حفظ المنطقة.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
-      <Stack.Screen options={{ title: 'إضافة منطقة آمنة', headerTitleAlign: 'center' }} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          
-          <View style={[styles.locationBox, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary }]}>
-            <MaterialCommunityIcons name="map-marker-radius" size={40} color={COLORS.primary} />
-            <Text style={[styles.locationTitle, { color: COLORS.primary }]}>إحداثيات المنطقة</Text>
-            {isLoadingLocation ? (
-              <ActivityIndicator color={COLORS.primary} style={{ marginTop: 10 }} />
-            ) : latitude && longitude ? (
-              <View style={{ alignItems: 'center', marginTop: 10 }}>
-                <Text style={styles.locationCoords}>خط العرض: {latitude.toFixed(6)}</Text>
-                <Text style={styles.locationCoords}>خط الطول: {longitude?.toFixed(6)}</Text>
-              </View>
-            ) : (
-              <Text style={styles.errorText}>لم يتم تحديد الموقع بعد</Text>
-            )}
-            
-            <View style={styles.locationButtonsRow}>
-              <TouchableOpacity style={styles.locationBtn} onPress={requestLocationPermission}>
-                <MaterialCommunityIcons name="refresh" size={20} color="white" />
-                <Text style={styles.locationBtnText}>تحديث الحالي</Text>
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ 
+        title: 'تحديد منطقة آمنة', 
+        headerTitleAlign: 'center',
+        headerLeft: () => (
+          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 15 }}>
+            <MaterialCommunityIcons name="arrow-right" size={28} color={COLORS.primary} />
+          </TouchableOpacity>
+        )
+      }} />
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.headerIcon}>
+          <MaterialCommunityIcons name="map-marker-radius" size={80} color={COLORS.primary} />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>اسم المنطقة (مثال: المنزل)</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="أدخل اسم المنطقة..."
+            textAlign="right"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>نطاق الأمان (بالأمتار)</Text>
+          <View style={styles.radiusRow}>
+            {['100', '500', '1000', '2000'].map((r) => (
+              <TouchableOpacity 
+                key={r}
+                style={[styles.radiusBtn, radius === r && styles.radiusBtnActive]}
+                onPress={() => setRadius(r)}
+              >
+                <Text style={[styles.radiusText, radius === r && styles.radiusTextActive]}>{r}م</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity style={[styles.locationBtn, { backgroundColor: COLORS.secondary }]} onPress={openGoogleMaps}>
-                <MaterialCommunityIcons name="google-maps" size={20} color="white" />
-                <Text style={styles.locationBtnText}>فتح الخرائط</Text>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>اسم المنطقة (مثال: المنزل) *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
-              value={name}
-              onChangeText={setName}
-              placeholder="المنزل، بيت الجدة، الحديقة..."
-              placeholderTextColor={dynamicColors.textMuted}
-              textAlign="right"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>نطاق الأمان (بالمتر)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
-              value={radius}
-              onChangeText={setRadius}
-              placeholder="100"
-              placeholderTextColor={dynamicColors.textMuted}
-              keyboardType="numeric"
-              textAlign="right"
-            />
-          </View>
-
-          <View style={styles.manualInputRow}>
-             <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.miniLabel}>خط الطول</Text>
-                <TextInput
-                  style={styles.miniInput}
-                  value={longitude?.toString()}
-                  onChangeText={(v) => setLongitude(parseFloat(v))}
-                  keyboardType="numeric"
-                  placeholder="0.0000"
-                />
-             </View>
-             <View style={{ flex: 1 }}>
-                <Text style={styles.miniLabel}>خط العرض</Text>
-                <TextInput
-                  style={styles.miniInput}
-                  value={latitude?.toString()}
-                  onChangeText={(v) => setLatitude(parseFloat(v))}
-                  keyboardType="numeric"
-                  placeholder="0.0000"
-                />
-             </View>
-          </View>
-
+        <View style={styles.locationSection}>
+          <Text style={styles.label}>موقع المنطقة الآمنة</Text>
           <TouchableOpacity 
-            style={[styles.submitButton, { backgroundColor: COLORS.primary, opacity: isSubmitting || latitude === null ? 0.7 : 1 }]} 
-            onPress={handleAddSafeZone}
-            disabled={isSubmitting || latitude === null}
+            style={[styles.locateBtn, location && styles.locateBtnSuccess]} 
+            onPress={getCurrentLocation}
+            disabled={isLocating}
           >
-            {isSubmitting ? (
+            {isLocating ? (
               <ActivityIndicator color="white" />
             ) : (
               <>
-                <MaterialCommunityIcons name="check" size={24} color="white" style={{ marginLeft: 10 }} />
-                <Text style={styles.submitButtonText}>حفظ المنطقة الآمنة</Text>
+                <MaterialCommunityIcons name={location ? "check-circle" : "crosshairs-gps"} size={24} color="white" />
+                <Text style={styles.locateBtnText}>
+                  {location ? 'تم التقاط الموقع بنجاح' : 'اضغط هنا لالتقاط الموقع الحالي'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
+          {location && (
+            <Text style={styles.coordText}>
+              الإحداثيات: {location.coords.latitude.toFixed(4)}, {location.coords.longitude.toFixed(4)}
+            </Text>
+          )}
+        </View>
 
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={styles.infoCard}>
+          <MaterialCommunityIcons name="information-outline" size={24} color={COLORS.secondary} />
+          <Text style={styles.infoText}>
+            سيقوم التطبيق بمراقبة موقع المريض وتنبيهك فوراً إذا خرج عن هذا النطاق.
+          </Text>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.submitBtn, { opacity: isSubmitting ? 0.7 : 1 }]} 
+          onPress={handleSaveZone}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.submitBtnText}>حفظ منطقة الأمان</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { padding: 20 },
-  locationBox: { padding: 25, borderRadius: 25, borderWidth: 1, alignItems: 'center', marginBottom: 25 },
-  locationTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10 },
-  locationCoords: { fontSize: 14, color: '#666', marginTop: 5 },
-  errorText: { color: COLORS.error, marginTop: 10 },
-  locationButtonsRow: { flexDirection: 'row-reverse', marginTop: 20, gap: 10 },
-  locationBtn: { flexDirection: 'row-reverse', backgroundColor: COLORS.primary, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, alignItems: 'center' },
-  locationBtnText: { color: 'white', fontWeight: 'bold', marginRight: 8, fontSize: 12 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, textAlign: 'right' },
-  input: { borderWidth: 1, borderRadius: 12, padding: 15, fontSize: 16, textAlign: 'right' },
-  manualInputRow: { flexDirection: 'row', marginBottom: 30 },
-  miniLabel: { fontSize: 12, color: COLORS.textMuted, marginBottom: 5, textAlign: 'right' },
-  miniInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 10, textAlign: 'center', backgroundColor: 'white' },
-  submitButton: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, marginBottom: 40 },
-  submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  scrollContent: { padding: 25 },
+  headerIcon: { alignItems: 'center', marginBottom: 30 },
+  inputGroup: { marginBottom: 25 },
+  label: { fontSize: 16, fontWeight: 'bold', color: COLORS.textDark, marginBottom: 10, textAlign: 'right' },
+  input: { backgroundColor: 'white', borderRadius: 15, padding: 18, fontSize: 16, borderWidth: 1, borderColor: '#eee' },
+  radiusRow: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
+  radiusBtn: { flex: 0.22, backgroundColor: 'white', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
+  radiusBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  radiusText: { fontSize: 14, color: COLORS.textDark },
+  radiusTextActive: { color: 'white', fontWeight: 'bold' },
+  locationSection: { marginBottom: 25 },
+  locateBtn: { backgroundColor: COLORS.secondary, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 20, borderRadius: 15, elevation: 3 },
+  locateBtnSuccess: { backgroundColor: '#4CAF50' },
+  locateBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold', marginRight: 10 },
+  coordText: { textAlign: 'center', marginTop: 10, color: '#888', fontSize: 12 },
+  infoCard: { flexDirection: 'row-reverse', backgroundColor: COLORS.secondary + '10', padding: 20, borderRadius: 20, alignItems: 'center', marginBottom: 30 },
+  infoText: { flex: 1, marginRight: 12, fontSize: 14, color: COLORS.secondary, textAlign: 'right', lineHeight: 22 },
+  submitBtn: { backgroundColor: COLORS.primary, padding: 20, borderRadius: 15, alignItems: 'center', elevation: 5 },
+  submitBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
 });
