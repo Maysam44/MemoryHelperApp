@@ -68,24 +68,30 @@ export default function AIChatScreen() {
         model: "gemini-1.5-flash",
         systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'. إذا أرسل المستخدم صورة، حللها بحنان وذكره بذكريات جميلة مرتبطة بمحتواها."
       });
-      const chat = model.startChat({
-        history: messages.slice(-10).map(msg => ({
+
+      // FIX: Gemini requires the first message in history to be from 'user'
+      // We filter out the initial AI welcome message from the history sent to the API
+      const history = messages
+        .filter(msg => msg.id !== '1') // Remove the first AI welcome message from history
+        .slice(-10)
+        .map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }],
-        })),
-      });
+        }));
+
       let result;
       if (imageBase64) {
         const prompt = userText || "ماذا ترى في هذه الصورة؟ احكِ لي عنها بحنان.";
         const imagePart = { inlineData: { data: imageBase64, mimeType: "image/jpeg" } };
         result = await model.generateContent([prompt, imagePart]);
       } else {
+        const chat = model.startChat({ history });
         result = await chat.sendMessage(userText);
       }
       const response = await result.response;
       return response.text();
     } catch (error) {
-      console.error(error);
+      console.error("Gemini Error:", error);
       return getFallbackResponse(userText);
     }
   };
@@ -171,9 +177,9 @@ export default function AIChatScreen() {
         )
       }} />
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{ flex: 1 }} 
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
         <FlatList 
           ref={flatListRef} 
