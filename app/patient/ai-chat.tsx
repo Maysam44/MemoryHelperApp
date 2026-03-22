@@ -12,6 +12,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -59,20 +60,21 @@ export default function AIChatScreen() {
 
   useEffect(() => {
     scrollToBottom();
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', scrollToBottom);
+    return () => keyboardDidShowListener.remove();
   }, [messages]);
 
   const getGeminiResponse = async (userText: string, imageBase64?: string): Promise<string> => {
     if (!genAI) return getFallbackResponse(userText);
     try {
+      // FIX: Use 'gemini-1.5-flash' or 'gemini-pro' based on availability, 
+      // but let's try 'gemini-1.5-flash' again with proper configuration or fallback to 'gemini-pro'
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        systemInstruction: "أنت مساعد ذكي حنون وصبور لتطبيق 'رفيق الذاكرة' المخصص لمرضى الزهايمر. مهمتك هي الاستماع للمريض، مساعدته على تذكر الأشياء الجميلة، والحديث معه بلغة عربية بسيطة وودودة جداً. افهم رسائل المستخدم بدقة ورد عليها بسياق مناسب. كن رفيقاً حقيقياً لا يمل. تحدث بحنان وصبر وحب. لا تذكر أنك روبوت أو برنامج، بل أنت 'رفيق'. إذا أرسل المستخدم صورة، حللها بحنان وذكره بذكريات جميلة مرتبطة بمحتواها."
+        model: "gemini-1.5-flash", // Most common and free
       });
 
-      // FIX: Gemini requires the first message in history to be from 'user'
-      // We filter out the initial AI welcome message from the history sent to the API
       const history = messages
-        .filter(msg => msg.id !== '1') // Remove the first AI welcome message from history
+        .filter(msg => msg.id !== '1')
         .slice(-10)
         .map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'model',
@@ -83,23 +85,40 @@ export default function AIChatScreen() {
       if (imageBase64) {
         const prompt = userText || "ماذا ترى في هذه الصورة؟ احكِ لي عنها بحنان.";
         const imagePart = { inlineData: { data: imageBase64, mimeType: "image/jpeg" } };
-        result = await model.generateContent([prompt, imagePart]);
+        result = await model.generateContent([
+          { text: "أنت مساعد حنون لمرضى الزهايمر. حلل الصورة بحب." },
+          prompt, 
+          imagePart
+        ]);
       } else {
-        const chat = model.startChat({ history });
+        const chat = model.startChat({ 
+          history,
+          generationConfig: {
+            maxOutputTokens: 500,
+          }
+        });
         result = await chat.sendMessage(userText);
       }
       const response = await result.response;
       return response.text();
     } catch (error) {
       console.error("Gemini Error:", error);
-      return getFallbackResponse(userText);
+      // Try fallback to gemini-pro if flash fails
+      try {
+          const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+          const chat = model.startChat({ history: [] });
+          const result = await chat.sendMessage(userText);
+          return (await result.response).text();
+      } catch (e) {
+          return getFallbackResponse(userText);
+      }
     }
   };
 
   const getFallbackResponse = (userText: string): string => {
     const userLower = userText.toLowerCase();
     if (userLower.includes('هاي') || userLower.includes('مرحبا')) return "أهلاً بك يا صديقي العزيز! يسعدني جداً أن أتحدث معك. كيف حالك؟";
-    return "هذا جميل جداً! أنا معك وأصغي إليك بكل حب. أخبرني المزيد.";
+    return "أنا أسمعك جيداً يا صديقي، أخبرني المزيد عما يدور في خاطرك، أنا هنا معك دائماً.";
   };
 
   const handleSendMessage = async () => {
@@ -179,42 +198,44 @@ export default function AIChatScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{ flex: 1 }} 
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <FlatList 
-          ref={flatListRef} 
-          data={messages} 
-          keyExtractor={(item) => item.id} 
-          renderItem={renderMessage} 
-          contentContainerStyle={styles.listContent} 
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={scrollToBottom}
-        />
-        {isLoading && (
-          <View style={styles.loadingIndicator}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={{ marginRight: 10, color: '#666' }}>الرفيق الذكي يكتب...</Text>
-          </View>
-        )}
-        <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
-            <MaterialCommunityIcons name="image-plus" size={26} color={COLORS.primary} />
-          </TouchableOpacity>
-          <TextInput 
-            style={styles.input} 
-            placeholder="اكتب لرفيقك..." 
-            value={inputText} 
-            onChangeText={setInputText} 
-            multiline 
-            textAlign="right" 
+        <View style={{ flex: 1 }}>
+          <FlatList 
+            ref={flatListRef} 
+            data={messages} 
+            keyExtractor={(item) => item.id} 
+            renderItem={renderMessage} 
+            contentContainerStyle={styles.listContent} 
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={scrollToBottom}
           />
-          <TouchableOpacity 
-            style={[styles.sendButton, { backgroundColor: inputText.trim() ? COLORS.primary : '#ccc' }]} 
-            onPress={handleSendMessage} 
-            disabled={!inputText.trim() || isLoading}
-          >
-            <MaterialCommunityIcons name="send" size={24} color="white" />
-          </TouchableOpacity>
+          {isLoading && (
+            <View style={styles.loadingIndicator}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={{ marginRight: 10, color: '#666' }}>الرفيق الذكي يكتب...</Text>
+            </View>
+          )}
+          <View style={styles.inputContainer}>
+            <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
+              <MaterialCommunityIcons name="image-plus" size={26} color={COLORS.primary} />
+            </TouchableOpacity>
+            <TextInput 
+              style={styles.input} 
+              placeholder="اكتب لرفيقك..." 
+              value={inputText} 
+              onChangeText={setInputText} 
+              multiline 
+              textAlign="right" 
+            />
+            <TouchableOpacity 
+              style={[styles.sendButton, { backgroundColor: inputText.trim() ? COLORS.primary : '#ccc' }]} 
+              onPress={handleSendMessage} 
+              disabled={!inputText.trim() || isLoading}
+            >
+              <MaterialCommunityIcons name="send" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -223,7 +244,7 @@ export default function AIChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 20 },
+  listContent: { padding: 20, paddingBottom: 10 },
   messageContainer: { marginBottom: 20, maxWidth: '85%' },
   userMessageContainer: { alignSelf: 'flex-start' },
   aiMessageContainer: { alignSelf: 'flex-end' },
