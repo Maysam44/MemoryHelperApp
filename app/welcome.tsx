@@ -11,7 +11,12 @@ export default function OnboardingScreen() {
 
   const handleStart = (role: 'caregiver' | 'patient') => {
     // تم تأجيل الأذونات الإجبارية، ننتقل مباشرة لشاشة الخصوصية أو التسجيل
-    router.push('/permissions/privacy');
+    if (role === 'patient') {
+      // توجيه المريض لشاشة مسح QR
+      router.push('/patient/scan-qr');
+    } else {
+      router.push('/permissions/privacy');
+    }
   };
 
   return (
