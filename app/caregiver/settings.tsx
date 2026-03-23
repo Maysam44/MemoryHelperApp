@@ -151,6 +151,13 @@ export default function SettingsScreen() {
             isDarkMode={isDarkMode}
             itemColor={dynamicColors.textDark}
           />
+          <SettingItem 
+            icon="qrcode" 
+            title="رمز QR للربط" 
+            onPress={() => router.push('/caregiver/show-qr')} 
+            isDarkMode={isDarkMode}
+            itemColor={dynamicColors.primary}
+          />
         </View>
 
         <View style={styles.section}>
