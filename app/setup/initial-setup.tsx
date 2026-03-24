@@ -71,16 +71,16 @@ export default function InitialSetupScreen() {
     { type: 'header', title: 'أولاً، معلومات مقدم الرعاية', icon: 'account-heart-outline' },
     { type: 'image-picker', label: 'صورتك الشخصية', value: caregiverImage, setter: setCaregiverImage },
     { type: 'input', label: 'اسمك الكامل', value: caregiverName, setter: setCaregiverName, placeholder: 'مثال: أحمد علي' },
-    { type: 'input', label: 'علاقتك بالمريض', value: caregiverRelationship, setter: setCaregiverRelationship, placeholder: 'مثال: ابن، ابنة، ممرض...' },
+    { type: 'input', label: 'علاقتك بالمريض', value: caregiverRelationship, setter: setCaregiverRelationship, placeholder: 'مثال: اب ، ابن ، ممرض...' },
     
     { type: 'divider' },
     
     { type: 'header', title: 'ثانياً، معلومات الشخص العزيز (المريض)', icon: 'account-star-outline' },
     { type: 'image-picker', label: 'صورة المريض', value: patientImage, setter: setPatientImage },
-    { type: 'input', label: 'اسم المريض', value: patientName, setter: setPatientName, placeholder: 'مثال: الوالد محمد' },
+    { type: 'input', label: 'اسم المريض', value: patientName, setter: setPatientName, placeholder: 'مثال:  محمد' },
     { type: 'input', label: 'ماذا يحب؟', value: patientLikes, setter: setPatientLikes, placeholder: 'مثال: القهوة، المشي، القرآن...' },
-    { type: 'input', label: 'وظيفته السابقة/الحالية', value: patientJob, setter: setPatientJob, placeholder: 'مثال: معلم متقاعد' },
-    { type: 'input', label: 'العمر', value: patientAge, setter: setPatientAge, placeholder: 'مثال: 75', keyboard: 'number-pad' },
+    { type: 'input', label: 'وظيفته السابقة/الحالية', value: patientJob, setter: setPatientJob, placeholder: 'مثال:طالب ، معلم متقاعد' },
+    { type: 'input', label: 'العمر', value: patientAge, setter: setPatientAge, placeholder: 'مثال:20 ، 75', keyboard: 'number-pad' },
     { type: 'toggle', label: 'مرحلة ضعف الذاكرة', value: memoryStage, setter: setMemoryStage },
     { type: 'input', label: 'معلومات إضافية تهمنا', value: additionalInfo, setter: setAdditionalInfo, placeholder: 'أي ملاحظات أخرى تود إضافتها...', multiline: true },
   ];

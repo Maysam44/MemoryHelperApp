@@ -133,7 +133,7 @@ export default function CaregiverDashboard() {
             <Text style={styles.noteTitle}>تلميحة ذكية</Text>
           </View>
           <Text style={styles.noteText}>
-            للعودة من وضع المريض، اضغط مرتين متتاليتين على صورة المريض في الزاوية العلوية.
+            للعودة من وضع المريض، اضغط ثانيتين على صورة المريض في الزاوية العلوية.
           </Text>
         </View>
       </ScrollView>

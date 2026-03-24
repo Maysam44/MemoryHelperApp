@@ -108,7 +108,7 @@ export default function AddPersonScreen() {
               style={styles.input}
               value={relationship}
               onChangeText={setRelationship}
-              placeholder="مثال: الابن الأكبر"
+              placeholder="مثال: الام ،صديق"
               placeholderTextColor="#999"
               textAlign="right"
             />

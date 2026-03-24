@@ -4,47 +4,60 @@ import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// إعداد معالج التنبيهات المحلية
+// ✅ إصلاح: إضافة shouldShowBanner و shouldShowList المطلوبين
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowAlert: true, // تم تغييرها من shouldShowBanner/List لضمان التوافق
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
+
+function secondsUntilTime(hour: number, minute: number): number {
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hour, minute, 0, 0);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+  return Math.floor((target.getTime() - now.getTime()) / 1000);
+}
 
 export const useNotifications = () => {
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
-    // طلب الأذونات عند استخدام الهوك (للتأكد)
     const requestPermissions = async () => {
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
         await Notifications.requestPermissionsAsync();
       }
-      
+
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('medicine-reminders', {
           name: 'تنبيهات الأدوية',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FF231F7C',
+          sound: 'default',
+          enableLights: true,
+          enableVibrate: true,
+          showBadge: true,
         });
       }
     };
 
     requestPermissions();
 
-    // استمع إلى التنبيهات الواردة
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
         console.log('تم استقبال تنبيه:', notification.request.content.title);
       }
     );
 
-    // استمع إلى استجابات المستخدم
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         console.log('استجابة المستخدم:', response.notification.request.content.title);
@@ -52,13 +65,8 @@ export const useNotifications = () => {
     );
 
     return () => {
-      // الإصلاح: استخدام .remove() بدلاً من Notifications.removeNotificationSubscription
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
+      if (notificationListener.current) notificationListener.current.remove();
+      if (responseListener.current) responseListener.current.remove();
     };
   }, []);
 
@@ -66,7 +74,7 @@ export const useNotifications = () => {
     try {
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       const alreadyScheduled = scheduled.some(n => n.content.data?.type === 'motivation');
-      
+
       if (!alreadyScheduled) {
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -77,7 +85,7 @@ export const useNotifications = () => {
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: 10 * 60, // كل 10 دقائق
+            seconds: 10 * 60,
             repeats: true,
           },
         });
@@ -88,56 +96,85 @@ export const useNotifications = () => {
   };
 
   const scheduleMedicineReminder = async (
+    medicineId: string,
     medicineName: string,
-    time: string, // صيغة HH:mm
-    description?: string
-  ) => {
-    try {
-      const [hours, minutes] = time.split(':').map(Number);
-      
-      // إلغاء أي تنبيهات قديمة لنفس الدواء لمنع التكرار
-      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-      for (const notification of scheduled) {
-        if (notification.content.data?.medicineName === medicineName) {
-          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    doses: {
+      time: string;
+      displayTime: string;
+      status: string;
+      lastTakenDate: null;
+      description: string;
+    }[]
+  ): Promise<any[]> => {
+    const updatedDoses = [];
+    const oneDayInSeconds = 24 * 60 * 60;
+
+    for (const dose of doses) {
+      try {
+        const parts = dose.time.split(':');
+        const hour = parseInt(parts[0], 10);
+        const minute = parseInt(parts[1], 10);
+
+        if (isNaN(hour) || isNaN(minute)) {
+          console.error(`وقت غير صالح: ${dose.time}`);
+          updatedDoses.push({ ...dose, notificationId: null, repeatingNotificationId: null });
+          continue;
         }
-      }
 
-      // الجدولة اليومية
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🏥 حان وقت الدواء',
-          body: `${medicineName}: ${description || 'خذ الدواء الآن'}`,
-          sound: 'default',
-          badge: 1,
-          data: {
-            type: 'medicine_reminder',
-            medicineName,
-            time,
+        const secondsUntil = secondsUntilTime(hour, minute);
+        console.log(`⏰ ${medicineName} - ${dose.displayTime} | بعد ${Math.floor(secondsUntil / 60)} دقيقة`);
+
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '💊 حان وقت الدواء',
+            body: `${medicineName} - ${dose.displayTime}${dose.description ? ` | ${dose.description}` : ''}`,
+            sound: 'default',
+            badge: 1,
+            data: { type: 'medicine_reminder', medicineId, medicineName, time: dose.time },
           },
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: hours,
-          minute: minutes,
-        },
-      });
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: secondsUntil,
+            repeats: false,
+          },
+        });
 
-      console.log(`تم جدولة تنبيه الدواء: ${medicineName} في ${time}`);
-    } catch (error) {
-      console.error('خطأ في جدولة التنبيه:', error);
+        const repeatingId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '💊 حان وقت الدواء',
+            body: `${medicineName} - ${dose.displayTime}${dose.description ? ` | ${dose.description}` : ''}`,
+            sound: 'default',
+            badge: 1,
+            data: { type: 'medicine_reminder', medicineId, medicineName, time: dose.time },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: secondsUntil + oneDayInSeconds,
+            repeats: true,
+          },
+        });
+
+        console.log(`✅ تم جدولة تنبيه: ${medicineName} في ${dose.displayTime} | ID: ${notificationId}`);
+        updatedDoses.push({ ...dose, notificationId, repeatingNotificationId: repeatingId });
+
+      } catch (error) {
+        console.error('خطأ في جدولة التنبيه:', error);
+        updatedDoses.push({ ...dose, notificationId: null, repeatingNotificationId: null });
+      }
     }
+
+    return updatedDoses;
   };
 
-  const cancelMedicineNotification = async (medicineName: string) => {
+  const cancelMedicineNotification = async (notificationId: string, repeatingNotificationId?: string) => {
     try {
-      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-      for (const notification of scheduled) {
-        if (notification.content.data?.medicineName === medicineName) {
-          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
-          console.log(`تم إلغاء تنبيه الدواء: ${medicineName}`);
-        }
+      if (notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
       }
+      if (repeatingNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(repeatingNotificationId);
+      }
+      console.log(`✅ تم إلغاء التنبيه`);
     } catch (error) {
       console.error('Error canceling notification:', error);
     }

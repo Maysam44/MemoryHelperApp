@@ -1,185 +1,160 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, KeyboardAvoidingView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth, db } from '../../firebaseConfig';
-import { doc, setDoc, collection } from 'firebase/firestore';
-import { useTheme } from '../../constants/ThemeContext';
-import { SIZES, FONTS, COLORS } from '../../constants/theme';
+import { doc, setDoc, collection, updateDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/use-notifications';
+import { COLORS } from '../../constants/theme';
 
 export default function AddMedicineScreen() {
   const router = useRouter();
-  const { dynamicColors } = useTheme();
   const { scheduleMedicineReminder } = useNotifications();
-  
+
   const [name, setName] = useState('');
-  const [hour, setHour] = useState('08');
-  const [minute, setMinute] = useState('00');
-  const [period, setPeriod] = useState<'AM' | 'PM'>('AM');
   const [dosage, setDosage] = useState('');
   const [description, setDescription] = useState('');
+  const [timesCount, setTimesCount] = useState(1);
+  const [doseTimes, setDoseTimes] = useState([{ hour: '08', minute: '00', period: 'AM' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAddMedicine = async () => {
-    if (!name.trim()) {
-      Alert.alert('خطأ', 'يرجى إدخال اسم الدواء');
-      return;
-    }
+  const handleTimesCountChange = (count: number) => {
+    setTimesCount(count);
+    const newDoseTimes = [...doseTimes];
+    while (newDoseTimes.length < count) newDoseTimes.push({ hour: '08', minute: '00', period: 'AM' });
+    while (newDoseTimes.length > count) newDoseTimes.pop();
+    setDoseTimes(newDoseTimes);
+  };
 
+  const handleAddMedicine = async () => {
+    if (!name.trim()) return Alert.alert('خطأ', 'يرجى إدخال اسم الدواء');
     setIsSubmitting(true);
     try {
       const user = auth.currentUser;
-      if (user) {
-        const medicineId = Date.now().toString();
-        
-        // تحويل الوقت لتنسيق 24 ساعة للحفظ الداخلي
-        let h = parseInt(hour);
-        if (period === 'PM' && h < 12) h += 12;
-        if (period === 'AM' && h === 12) h = 0;
-        const time24 = `${h.toString().padStart(2, '0')}:${minute}`;
+      if (!user) return;
 
-        const newMedicine = {
-          id: medicineId,
-          name,
+      const medicineId = Date.now().toString();
+
+      // ✅ parseInt لكل من hour و minute عشان يكونوا numbers صحيحة
+      const doses = doseTimes.map(d => {
+        let h = parseInt(d.hour, 10);
+        const m = parseInt(d.minute, 10); // ✅ كان ناقص هذا السطر
+
+        if (d.period === 'PM' && h < 12) h += 12;
+        if (d.period === 'AM' && h === 12) h = 0;
+
+        const time24 = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+
+        return {
           time: time24,
-          displayTime: `${hour}:${minute} ${period === 'AM' ? 'صباحاً' : 'مساءً'}`,
-          dosage,
-          description,
-          status: 'pending', // pending, taken, missed
+          displayTime: `${d.hour}:${d.minute} ${d.period === 'AM' ? 'صباحاً' : 'مساءً'}`,
+          status: 'pending',
           lastTakenDate: null,
-          createdAt: new Date().toISOString(),
+          description,
         };
+      });
 
-        const medRef = doc(collection(db, "users", user.uid, "medicines"), medicineId);
-        await setDoc(medRef, newMedicine);
+      const newMedicine = {
+        id: medicineId,
+        name,
+        dosage,
+        description,
+        doses,
+        createdAt: new Date().toISOString(),
+      };
 
-        // جدولة التنبيه الفعلي
-        await scheduleMedicineReminder(name, time24, description);
+      const medRef = doc(collection(db, 'users', user.uid, 'medicines'), medicineId);
+      await setDoc(medRef, newMedicine);
 
-        Alert.alert('تم بنجاح', 'تمت إضافة الدواء وجدولة التنبيهات الذكية');
-        router.back();
+      // ✅ scheduleMedicineReminder الآن تاخذ (medicineId, name, doses) وترجع doses مع notificationId
+      const scheduledDoses = await scheduleMedicineReminder(medicineId, name, doses);
+
+      // ✅ تحقق إن الـ doses رجعت صحيحة قبل الحفظ
+      if (!scheduledDoses || scheduledDoses.length === 0) {
+        throw new Error('فشل في جدولة الإشعارات');
       }
-    } catch (error) {
-      console.error("Error adding medicine:", error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء حفظ البيانات');
+
+      await updateDoc(medRef, { doses: scheduledDoses });
+
+      Alert.alert('تم بنجاح ✅', 'تمت إضافة الدواء مع إعداد التنبيهات');
+      router.back();
+    } catch (err) {
+      console.error(err);
+      Alert.alert('خطأ', 'حدث خطأ أثناء حفظ الدواء');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: dynamicColors.backgroundLight }]}>
-      <Stack.Screen options={{ 
-        title: 'إضافة دواء جديد', 
-        headerTitleAlign: 'center',
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 15 }}>
-            <MaterialCommunityIcons name="arrow-right" size={28} color={COLORS.primary} />
-          </TouchableOpacity>
-        )
-      }} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8F9FD' }}>
+      <Stack.Screen options={{ title: 'إضافة دواء', headerTitleAlign: 'center' }} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          
+        <ScrollView contentContainerStyle={{ padding: 20 }}>
+
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>اسم الدواء *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
-              value={name}
-              onChangeText={setName}
-              placeholder="مثال: الأسبرين"
-              placeholderTextColor={dynamicColors.textMuted}
-              textAlign="right"
-            />
+            <Text style={styles.label}>اسم الدواء *</Text>
+            <TextInput value={name} onChangeText={setName} style={styles.input} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>وقت الدواء *</Text>
-            <View style={styles.timePickerRow}>
-              <View style={styles.periodSelector}>
-                <TouchableOpacity 
-                  style={[styles.periodBtn, period === 'AM' && styles.periodBtnActive]} 
-                  onPress={() => setPeriod('AM')}
-                >
-                  <Text style={[styles.periodText, period === 'AM' && styles.periodTextActive]}>صباحاً</Text>
+            <Text style={styles.label}>عدد الجرعات في اليوم *</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+              {[1, 2, 3].map(n => (
+                <TouchableOpacity key={n} onPress={() => handleTimesCountChange(n)} style={[styles.timesBtn, timesCount === n && styles.timesBtnActive]}>
+                  <Text style={[styles.timesBtnText, timesCount === n && { color: 'white' }]}>{n}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.periodBtn, period === 'PM' && styles.periodBtnActive]} 
-                  onPress={() => setPeriod('PM')}
-                >
-                  <Text style={[styles.periodText, period === 'PM' && styles.periodTextActive]}>مساءً</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.timeInputs}>
-                <TextInput
-                  style={styles.timeInput}
-                  value={minute}
-                  onChangeText={(val) => setMinute(val.replace(/[^0-9]/g, '').slice(0, 2))}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="00"
-                />
-                <Text style={styles.timeSeparator}>:</Text>
-                <TextInput
-                  style={styles.timeInput}
-                  value={hour}
-                  onChangeText={(val) => setHour(val.replace(/[^0-9]/g, '').slice(0, 2))}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="08"
-                />
-              </View>
+              ))}
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>الجرعة</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
-              value={dosage}
-              onChangeText={setDosage}
-              placeholder="مثال: حبة واحدة"
-              placeholderTextColor={dynamicColors.textMuted}
-              textAlign="right"
-            />
-          </View>
+          {doseTimes.map((dose, index) => (
+            <View key={index} style={{ marginBottom: 15 }}>
+              <Text style={styles.label}>جرعة {index + 1}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  value={dose.hour}
+                  onChangeText={val => setDoseTimes(prev => { const c = [...prev]; c[index] = { ...c[index], hour: val }; return c; })}
+                  style={styles.timeInput}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+                <Text style={{ fontSize: 24 }}>:</Text>
+                <TextInput
+                  value={dose.minute}
+                  onChangeText={val => setDoseTimes(prev => { const c = [...prev]; c[index] = { ...c[index], minute: val }; return c; })}
+                  style={styles.timeInput}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+                <TouchableOpacity onPress={() => setDoseTimes(prev => { const c = [...prev]; c[index] = { ...c[index], period: 'AM' }; return c; })}>
+                  <Text style={[styles.periodText, dose.period === 'AM' && styles.periodActive]}>صباحاً</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setDoseTimes(prev => { const c = [...prev]; c[index] = { ...c[index], period: 'PM' }; return c; })}>
+                  <Text style={[styles.periodText, dose.period === 'PM' && styles.periodActive]}>مساءً</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: dynamicColors.textDark }]}>وصف إضافي</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border, height: 80 }]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="مثال: بعد الأكل"
-              placeholderTextColor={dynamicColors.textMuted}
-              multiline
-              textAlign="right"
-            />
+            <Text style={styles.label}>الجرعة</Text>
+            <TextInput value={dosage} onChangeText={setDosage} style={styles.input} />
           </View>
 
-          <View style={styles.infoCard}>
-            <MaterialCommunityIcons name="bell-ring-outline" size={24} color={COLORS.secondary} />
-            <Text style={styles.infoText}>
-              سيصل تنبيه للمريض قبل 5 دقائق من الموعد، وعند الموعد تماماً. في حال عدم التأكيد، سيستمر التنبيه كل 5 دقائق.
-            </Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>وصف إضافي</Text>
+            <TextInput value={description} onChangeText={setDescription} style={[styles.input, { height: 80 }]} multiline />
           </View>
 
-          <TouchableOpacity 
-            style={[styles.submitButton, { backgroundColor: COLORS.primary, opacity: isSubmitting ? 0.7 : 1 }]} 
+          <TouchableOpacity
             onPress={handleAddMedicine}
+            style={[styles.submitButton, { opacity: isSubmitting ? 0.7 : 1 }]}
             disabled={isSubmitting}
           >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <>
-                <MaterialCommunityIcons name="check" size={24} color="white" style={{ marginLeft: 10 }} />
-                <Text style={styles.submitButtonText}>حفظ الدواء</Text>
-              </>
-            )}
+            <MaterialCommunityIcons name="check" size={24} color="white" style={{ marginLeft: 10 }} />
+            <Text style={styles.submitButtonText}>{isSubmitting ? 'جارٍ الحفظ...' : 'حفظ الدواء'}</Text>
           </TouchableOpacity>
 
         </ScrollView>
@@ -189,22 +164,15 @@ export default function AddMedicineScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { padding: 20 },
-  inputGroup: { marginBottom: 25 },
-  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'right' },
-  input: { borderWidth: 1, borderRadius: 15, padding: 15, fontSize: 16, textAlign: 'right' },
-  timePickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  timeInputs: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 15, padding: 10, borderWidth: 1, borderColor: '#eee' },
-  timeInput: { width: 50, fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: COLORS.primary },
-  timeSeparator: { fontSize: 24, fontWeight: 'bold', color: '#ccc', marginHorizontal: 5 },
-  periodSelector: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 12, padding: 4 },
-  periodBtn: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10 },
-  periodBtnActive: { backgroundColor: 'white', elevation: 2 },
-  periodText: { fontSize: 14, color: '#888' },
-  periodTextActive: { color: COLORS.primary, fontWeight: 'bold' },
-  infoCard: { flexDirection: 'row-reverse', backgroundColor: COLORS.secondary + '10', padding: 15, borderRadius: 15, alignItems: 'center', marginTop: 10 },
-  infoText: { flex: 1, marginRight: 10, fontSize: 13, color: COLORS.secondary, textAlign: 'right', lineHeight: 20 },
-  submitButton: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, marginTop: 30, marginBottom: 40, elevation: 5 },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 5, textAlign: 'right' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 15, padding: 12, fontSize: 16, backgroundColor: 'white', textAlign: 'right' },
+  timesBtn: { marginRight: 10, backgroundColor: '#ddd', padding: 10, borderRadius: 10 },
+  timesBtnActive: { backgroundColor: '#4CAF50' },
+  timesBtnText: { fontWeight: 'bold' },
+  timeInput: { width: 50, borderWidth: 1, borderColor: '#ddd', padding: 5, fontSize: 18, textAlign: 'center', marginRight: 5 },
+  periodText: { marginHorizontal: 5, fontWeight: 'bold', color: '#888' },
+  periodActive: { color: '#4CAF50' },
+  submitButton: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, padding: 15, borderRadius: 15, marginTop: 20, marginBottom: 40 },
   submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 });

@@ -96,30 +96,8 @@ export default function ShowQRScreen() {
             <ActivityIndicator size="large" color={dynamicColors.primary} />
           )}
         </View>
-
-        <View style={styles.infoSection}>
-          <View style={[styles.infoBox, { backgroundColor: dynamicColors.backgroundLight, borderColor: dynamicColors.border }]}>
-            <MaterialCommunityIcons name="account-heart" size={24} color={dynamicColors.primary} />
-            <View style={styles.infoTextContainer}>
-              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>مقدم الرعاية</Text>
-              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>
-                {userData?.displayName || 'أنت'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.infoBox, { backgroundColor: dynamicColors.backgroundLight, borderColor: dynamicColors.border }]}>
-            <MaterialCommunityIcons name="account-star" size={24} color={dynamicColors.secondary} />
-            <View style={styles.infoTextContainer}>
-              <Text style={[styles.infoLabel, { color: dynamicColors.textMuted }]}>رفيق الذاكرة</Text>
-              <Text style={[styles.infoValue, { color: dynamicColors.textDark }]}>
-                {userData?.patientName || 'لم يتم تعيين'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
+        
+         <TouchableOpacity
           style={[styles.button, { backgroundColor: dynamicColors.primary }]}
           onPress={handleCopyQR}
         >

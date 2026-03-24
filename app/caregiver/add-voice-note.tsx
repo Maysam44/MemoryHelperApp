@@ -157,7 +157,7 @@ export default function AddVoiceNoteScreen() {
               style={[styles.input, { backgroundColor: dynamicColors.card, color: dynamicColors.textDark, borderColor: dynamicColors.border }]}
               value={sender}
               onChangeText={setSender}
-              placeholder="مثال: مريم (ابنتك)"
+              placeholder="مثال: مريم (صديقتك)"
               placeholderTextColor={dynamicColors.textMuted}
               textAlign="right"
             />

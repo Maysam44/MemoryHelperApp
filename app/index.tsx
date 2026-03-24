@@ -76,10 +76,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoImage: {
-    width: 180,
-    height: 180,
-    marginBottom: SIZES.padding,
-  },
+  width: 180,
+  height: 180,
+  marginBottom: SIZES.padding,
+  borderRadius: 90, 
+},
   appNameContainer: {
     flexDirection: 'row-reverse',
     alignItems: 'center',

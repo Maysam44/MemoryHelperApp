@@ -131,7 +131,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.backgroundLight },
   scrollContent: { padding: SIZES.padding, alignItems: 'center', justifyContent: 'center', minHeight: '100%' },
   header: { alignItems: 'center', marginBottom: SIZES.padding * 2 },
-  logoImage: { width: 100, height: 100, marginBottom: SIZES.base },
+logoImage: {
+  width: 180,
+  height: 180,
+  marginBottom: SIZES.padding,
+  borderRadius: 90, 
+},
   appNameContainer: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: SIZES.base },
   appNamePart: { fontSize: SIZES.h2, fontWeight: FONTS.bold },
   title: { fontSize: SIZES.h2, fontWeight: FONTS.bold, color: COLORS.textDark, marginBottom: SIZES.base },
