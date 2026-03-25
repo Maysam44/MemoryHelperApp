@@ -32,8 +32,11 @@ export default function ScanQRScreen() {
     setIsProcessing(true);
 
     try {
+      console.log('=== QR Scan Started ===');
+      
       // فك تشفير بيانات QR
       const qrParsed = parseQRData(data);
+      console.log('QR Parsed:', qrParsed);
 
       if (!qrParsed || !qrParsed.caregiverId) {
         Alert.alert('خطأ', 'رمز QR غير صحيح. يرجى المحاولة مرة أخرى.');
@@ -43,9 +46,10 @@ export default function ScanQRScreen() {
       }
 
       const caregiverId = qrParsed.caregiverId;
-      console.log('Caregiver ID from QR:', caregiverId);
+      console.log('Caregiver ID:', caregiverId);
 
-      // التحقق من وجود مقدم الرعاية
+      // الخطوة 1: التحقق من وجود مقدم الرعاية
+      console.log('Step 1: Fetching caregiver data...');
       const caregiverDocRef = doc(db, 'users', caregiverId);
       const caregiverDocSnap = await getDoc(caregiverDocRef);
 
@@ -57,96 +61,114 @@ export default function ScanQRScreen() {
       }
 
       const caregiverData = caregiverDocSnap.data() || {};
-      console.log('Caregiver Data:', JSON.stringify(caregiverData, null, 2));
+      console.log('Caregiver Data:', caregiverData);
 
-      // التحقق من أن مقدم الرعاية لديه بيانات مريض معينة (بأكثر من احتمال للهيكلية)
+      // الخطوة 2: التحقق من بيانات المريض
+      console.log('Step 2: Checking patient data...');
       const patientData = caregiverData.patient || {};
       const patientName = patientData.name || caregiverData.patientName;
 
       if (!patientName) {
-        console.log('No patient name found. Patient data:', JSON.stringify(patientData));
         Alert.alert('خطأ', 'مقدم الرعاية لم يقم بتعيين مريض بعد.');
         setIsScanning(true);
         setIsProcessing(false);
         return;
       }
 
-      console.log('Patient name found:', patientName);
+      console.log('Patient Name:', patientName);
 
-      // تسجيل الدخول بشكل مجهول أولاً (إذا لم يكن المستخدم مسجلاً)
+      // الخطوة 3: تسجيل الدخول المجهول
+      console.log('Step 3: Authenticating user...');
       let currentUser = auth.currentUser;
+      
       if (!currentUser) {
-        console.log('No current user, signing in anonymously...');
-        const anonResult = await signInAnonymously(auth);
-        currentUser = anonResult.user;
-        console.log('Anonymous user created:', currentUser.uid);
+        try {
+          const anonResult = await signInAnonymously(auth);
+          currentUser = anonResult.user;
+          console.log('Anonymous user created:', currentUser.uid);
+        } catch (authError: any) {
+          console.error('Auth Error:', authError);
+          Alert.alert(
+            'خطأ في المصادقة',
+            `فشل تسجيل الدخول. الكود: ${authError?.code || 'UNKNOWN'}\n\nالرسالة: ${authError?.message || 'خطأ غير معروف'}`
+          );
+          setIsScanning(true);
+          setIsProcessing(false);
+          return;
+        }
       } else {
-        console.log('Current user exists:', currentUser.uid);
+        console.log('Using existing user:', currentUser.uid);
       }
 
-      // حفظ معرف مقدم الرعاية المرتبط في بيانات المريض
+      // الخطوة 4: حفظ بيانات المريض
+      console.log('Step 4: Saving patient document...');
       const patientDocRef = doc(db, 'users', currentUser.uid);
-      const patientDocSnap = await getDoc(patientDocRef);
 
-      console.log('Patient doc exists:', patientDocSnap.exists());
+      try {
+        const patientDocSnap = await getDoc(patientDocRef);
 
-      if (patientDocSnap.exists()) {
-        // تحديث المستند الموجود
-        console.log('Updating existing patient document...');
-        await updateDoc(patientDocRef, {
-          caregiverId: caregiverId,
-          role: 'patient',
-          linkedAt: new Date().toISOString(),
-        });
-      } else {
-        // إنشاء مستند جديد
-        console.log('Creating new patient document...');
-        await setDoc(patientDocRef, {
-          caregiverId: caregiverId,
-          role: 'patient',
-          linkedAt: new Date().toISOString(),
-          displayName: patientName || 'المريض',
-        });
+        if (patientDocSnap.exists()) {
+          console.log('Updating existing patient document...');
+          await updateDoc(patientDocRef, {
+            caregiverId: caregiverId,
+            role: 'patient',
+            linkedAt: new Date().toISOString(),
+          });
+        } else {
+          console.log('Creating new patient document...');
+          await setDoc(patientDocRef, {
+            caregiverId: caregiverId,
+            role: 'patient',
+            linkedAt: new Date().toISOString(),
+            displayName: patientName || 'المريض',
+          });
+        }
+        console.log('Patient document saved successfully');
+      } catch (firestoreError: any) {
+        console.error('Firestore Error:', firestoreError);
+        Alert.alert(
+          'خطأ في حفظ البيانات',
+          `فشل حفظ بيانات المريض. الكود: ${firestoreError?.code || 'UNKNOWN'}\n\nالرسالة: ${firestoreError?.message || 'خطأ غير معروف'}`
+        );
+        setIsScanning(true);
+        setIsProcessing(false);
+        return;
       }
 
-      console.log('Patient document saved successfully');
+      // الخطوة 5: تحديث بيانات مقدم الرعاية
+      console.log('Step 5: Updating caregiver document...');
+      try {
+        await updateDoc(caregiverDocRef, {
+          patientId: currentUser.uid,
+        });
+        console.log('Caregiver document updated successfully');
+      } catch (updateError: any) {
+        console.error('Update Error:', updateError);
+        // لا نوقف العملية هنا لأن المريض تم ربطه بنجاح
+        console.log('Warning: Could not update caregiver document, but patient linking succeeded');
+      }
 
-      // تحديث بيانات مقدم الرعاية بإضافة معرف المريض
-      console.log('Updating caregiver document with patient ID...');
-      await updateDoc(caregiverDocRef, {
-        patientId: currentUser.uid,
-      });
-
-      console.log('Caregiver document updated successfully');
+      console.log('=== QR Scan Completed Successfully ===');
 
       Alert.alert('نجح!', 'تم ربطك بنجاح مع مقدم الرعاية.', [
         {
           text: 'متابعة',
           onPress: () => {
-            // توجيه المريض لصفحة لوحة التحكم الخاصة به
             router.replace('/patient/dashboard');
           },
         },
       ]);
     } catch (error: any) {
-      console.error('Error scanning QR:', error);
-      console.error('Error code:', error?.code);
-      console.error('Error message:', error?.message);
-      console.error('Full error:', JSON.stringify(error));
+      console.error('=== CRITICAL ERROR ===');
+      console.error('Error:', error);
+      console.error('Error Code:', error?.code);
+      console.error('Error Message:', error?.message);
+      console.error('Full Stack:', error?.stack);
 
-      let errorMessage = 'حدث خطأ أثناء معالجة الرمز. يرجى المحاولة مرة أخرى.';
+      let errorTitle = 'خطأ في المعالجة';
+      let errorMessage = `حدث خطأ غير متوقع. الكود: ${error?.code || 'UNKNOWN'}\n\nالتفاصيل: ${error?.message || 'لا توجد تفاصيل متاحة'}`;
 
-      if (error?.code === 'auth/operation-not-allowed') {
-        errorMessage = 'التسجيل المجهول غير مفعل. يرجى الاتصال بالدعم الفني.';
-      } else if (error?.code === 'permission-denied') {
-        errorMessage = 'ليس لديك الصلاحية لربط هذا الحساب. اتصل بمقدم الرعاية.';
-      } else if (error?.message?.includes('Cannot read property') || error?.message?.includes('Cannot read')) {
-        errorMessage = 'بيانات مقدم الرعاية غير كاملة. يرجى مراجعة الإعدادات.';
-      } else if (error?.code === 'PERMISSION_DENIED') {
-        errorMessage = 'خطأ في الصلاحيات. تأكد من أن قاعدة البيانات تسمح بالكتابة.';
-      }
-
-      Alert.alert('خطأ', errorMessage);
+      Alert.alert(errorTitle, errorMessage);
       setIsScanning(true);
       setIsProcessing(false);
     }
