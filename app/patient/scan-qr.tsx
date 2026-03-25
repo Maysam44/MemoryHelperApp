@@ -55,10 +55,13 @@ export default function ScanQRScreen() {
         return;
       }
 
-      const caregiverData = caregiverDocSnap.data();
+      const caregiverData = caregiverDocSnap.data() || {};
 
-      // التحقق من أن مقدم الرعاية لديه مريض معين
-      if (!caregiverData.patientName) {
+      // التحقق من أن مقدم الرعاية لديه بيانات مريض معينة (بأكثر من احتمال للهيكلية)
+      const patientData = caregiverData.patient || {};
+      const patientName = patientData.name || caregiverData.patientName;
+
+      if (!patientName) {
         Alert.alert('خطأ', 'مقدم الرعاية لم يقم بتعيين مريض بعد.');
         setIsScanning(true);
         setIsProcessing(false);
@@ -89,7 +92,7 @@ export default function ScanQRScreen() {
           caregiverId: caregiverId,
           role: 'patient',
           linkedAt: new Date().toISOString(),
-          displayName: caregiverData.patientName || 'المريض',
+          displayName: patientName || 'المريض',
         });
       }
 
