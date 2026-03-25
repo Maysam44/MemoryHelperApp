@@ -34,9 +34,18 @@ export default function ScanQRScreen() {
     try {
       console.log('=== QR Scan Started ===');
       
-      // فك تشفير بيانات QR
-      const qrParsed = parseQRData(data);
-      console.log('QR Parsed:', qrParsed);
+      // ===== الخطوة 1: فك تشفير بيانات QR =====
+      let qrParsed;
+      try {
+        qrParsed = parseQRData(data);
+        console.log('✓ Step 1 Success: QR Parsed', qrParsed);
+      } catch (err: any) {
+        console.error('✗ Step 1 Failed: QR Parse Error', err);
+        Alert.alert('خطأ في الخطوة 1', `فشل فك تشفير الرمز: ${err?.message || 'خطأ غير معروف'}`);
+        setIsScanning(true);
+        setIsProcessing(false);
+        return;
+      }
 
       if (!qrParsed || !qrParsed.caregiverId) {
         Alert.alert('خطأ', 'رمز QR غير صحيح. يرجى المحاولة مرة أخرى.');
@@ -48,10 +57,19 @@ export default function ScanQRScreen() {
       const caregiverId = qrParsed.caregiverId;
       console.log('Caregiver ID:', caregiverId);
 
-      // الخطوة 1: التحقق من وجود مقدم الرعاية
-      console.log('Step 1: Fetching caregiver data...');
-      const caregiverDocRef = doc(db, 'users', caregiverId);
-      const caregiverDocSnap = await getDoc(caregiverDocRef);
+      // ===== الخطوة 2: جلب بيانات مقدم الرعاية =====
+      let caregiverDocSnap;
+      try {
+        const caregiverDocRef = doc(db, 'users', caregiverId);
+        caregiverDocSnap = await getDoc(caregiverDocRef);
+        console.log('✓ Step 2 Success: Caregiver document fetched');
+      } catch (err: any) {
+        console.error('✗ Step 2 Failed: Fetch Caregiver Error', err);
+        Alert.alert('خطأ في الخطوة 2', `فشل جلب بيانات مقدم الرعاية: ${err?.code || err?.message || 'خطأ غير معروف'}`);
+        setIsScanning(true);
+        setIsProcessing(false);
+        return;
+      }
 
       if (!caregiverDocSnap.exists()) {
         Alert.alert('خطأ', 'مقدم الرعاية غير موجود. يرجى التحقق من الرمز.');
@@ -60,13 +78,23 @@ export default function ScanQRScreen() {
         return;
       }
 
-      const caregiverData = caregiverDocSnap.data() || {};
-      console.log('Caregiver Data:', caregiverData);
-
-      // الخطوة 2: التحقق من بيانات المريض
-      console.log('Step 2: Checking patient data...');
-      const patientData = caregiverData.patient || {};
-      const patientName = patientData.name || caregiverData.patientName;
+      // ===== الخطوة 3: استخراج بيانات المريض =====
+      let caregiverData;
+      let patientName;
+      try {
+        caregiverData = caregiverDocSnap.data() || {};
+        console.log('Caregiver Data:', caregiverData);
+        
+        const patientData = caregiverData.patient || {};
+        patientName = patientData.name || caregiverData.patientName;
+        console.log('✓ Step 3 Success: Patient name extracted', patientName);
+      } catch (err: any) {
+        console.error('✗ Step 3 Failed: Extract Patient Data Error', err);
+        Alert.alert('خطأ في الخطوة 3', `فشل استخراج بيانات المريض: ${err?.message || 'خطأ غير معروف'}`);
+        setIsScanning(true);
+        setIsProcessing(false);
+        return;
+      }
 
       if (!patientName) {
         Alert.alert('خطأ', 'مقدم الرعاية لم يقم بتعيين مريض بعد.');
@@ -75,77 +103,64 @@ export default function ScanQRScreen() {
         return;
       }
 
-      console.log('Patient Name:', patientName);
-
-      // الخطوة 3: تسجيل الدخول المجهول
-      console.log('Step 3: Authenticating user...');
-      let currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        try {
+      // ===== الخطوة 4: تسجيل الدخول المجهول =====
+      let currentUser;
+      try {
+        currentUser = auth.currentUser;
+        if (!currentUser) {
           const anonResult = await signInAnonymously(auth);
           currentUser = anonResult.user;
-          console.log('Anonymous user created:', currentUser.uid);
-        } catch (authError: any) {
-          console.error('Auth Error:', authError);
-          Alert.alert(
-            'خطأ في المصادقة',
-            `فشل تسجيل الدخول. الكود: ${authError?.code || 'UNKNOWN'}\n\nالرسالة: ${authError?.message || 'خطأ غير معروف'}`
-          );
-          setIsScanning(true);
-          setIsProcessing(false);
-          return;
+          console.log('✓ Step 4 Success: Anonymous user created', currentUser.uid);
+        } else {
+          console.log('✓ Step 4 Success: Using existing user', currentUser.uid);
         }
-      } else {
-        console.log('Using existing user:', currentUser.uid);
+      } catch (err: any) {
+        console.error('✗ Step 4 Failed: Auth Error', err);
+        Alert.alert('خطأ في الخطوة 4', `فشل تسجيل الدخول: ${err?.code || err?.message || 'خطأ غير معروف'}`);
+        setIsScanning(true);
+        setIsProcessing(false);
+        return;
       }
 
-      // الخطوة 4: حفظ بيانات المريض
-      console.log('Step 4: Saving patient document...');
-      const patientDocRef = doc(db, 'users', currentUser.uid);
-
+      // ===== الخطوة 5: حفظ بيانات المريض =====
       try {
+        const patientDocRef = doc(db, 'users', currentUser.uid);
         const patientDocSnap = await getDoc(patientDocRef);
 
         if (patientDocSnap.exists()) {
-          console.log('Updating existing patient document...');
           await updateDoc(patientDocRef, {
             caregiverId: caregiverId,
             role: 'patient',
             linkedAt: new Date().toISOString(),
           });
+          console.log('✓ Step 5a Success: Patient document updated');
         } else {
-          console.log('Creating new patient document...');
           await setDoc(patientDocRef, {
             caregiverId: caregiverId,
             role: 'patient',
             linkedAt: new Date().toISOString(),
             displayName: patientName || 'المريض',
           });
+          console.log('✓ Step 5b Success: Patient document created');
         }
-        console.log('Patient document saved successfully');
-      } catch (firestoreError: any) {
-        console.error('Firestore Error:', firestoreError);
-        Alert.alert(
-          'خطأ في حفظ البيانات',
-          `فشل حفظ بيانات المريض. الكود: ${firestoreError?.code || 'UNKNOWN'}\n\nالرسالة: ${firestoreError?.message || 'خطأ غير معروف'}`
-        );
+      } catch (err: any) {
+        console.error('✗ Step 5 Failed: Save Patient Error', err);
+        Alert.alert('خطأ في الخطوة 5', `فشل حفظ بيانات المريض: ${err?.code || err?.message || 'خطأ غير معروف'}`);
         setIsScanning(true);
         setIsProcessing(false);
         return;
       }
 
-      // الخطوة 5: تحديث بيانات مقدم الرعاية
-      console.log('Step 5: Updating caregiver document...');
+      // ===== الخطوة 6: تحديث بيانات مقدم الرعاية =====
       try {
+        const caregiverDocRef = doc(db, 'users', caregiverId);
         await updateDoc(caregiverDocRef, {
           patientId: currentUser.uid,
         });
-        console.log('Caregiver document updated successfully');
-      } catch (updateError: any) {
-        console.error('Update Error:', updateError);
+        console.log('✓ Step 6 Success: Caregiver document updated');
+      } catch (err: any) {
+        console.error('⚠ Step 6 Warning: Update Caregiver Error (non-critical)', err);
         // لا نوقف العملية هنا لأن المريض تم ربطه بنجاح
-        console.log('Warning: Could not update caregiver document, but patient linking succeeded');
       }
 
       console.log('=== QR Scan Completed Successfully ===');
@@ -159,16 +174,16 @@ export default function ScanQRScreen() {
         },
       ]);
     } catch (error: any) {
-      console.error('=== CRITICAL ERROR ===');
+      console.error('=== UNEXPECTED ERROR ===');
       console.error('Error:', error);
       console.error('Error Code:', error?.code);
       console.error('Error Message:', error?.message);
       console.error('Full Stack:', error?.stack);
 
-      let errorTitle = 'خطأ في المعالجة';
-      let errorMessage = `حدث خطأ غير متوقع. الكود: ${error?.code || 'UNKNOWN'}\n\nالتفاصيل: ${error?.message || 'لا توجد تفاصيل متاحة'}`;
-
-      Alert.alert(errorTitle, errorMessage);
+      Alert.alert(
+        'خطأ غير متوقع',
+        `حدث خطأ غير متوقع.\n\nالكود: ${error?.code || 'UNKNOWN'}\n\nالرسالة: ${error?.message || 'لا توجد تفاصيل'}`
+      );
       setIsScanning(true);
       setIsProcessing(false);
     }
