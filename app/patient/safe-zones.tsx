@@ -30,7 +30,16 @@ export default function SafeZonesScreen() {
     try {
       const user = auth.currentUser;
       if (user) {
-        const zonesRef = collection(db, `users/${user.uid}/safeZones`);
+        const userDoc = await getDocs(collection(db, 'users'));
+        // نحتاج للحصول على مستند المستخدم الحالي أولاً لمعرفة caregiverId
+        // ولكن fetchSafeZones تُستدعى في useEffect، لذا يفضل جلب مستند المستخدم هناك أو هنا
+        const userDocRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userDocRef);
+        const userData = userSnap.data();
+        
+        const targetCaregiverId = userData?.caregiverId || user.uid;
+
+        const zonesRef = collection(db, `users/${targetCaregiverId}/safeZones`);
         const snapshot = await getDocs(zonesRef);
         const fetchedZones: SafeZone[] = [];
         snapshot.forEach((doc) => {

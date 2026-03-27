@@ -35,47 +35,61 @@ export default function MedicineRemindersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
 
+  const [targetCaregiverId, setTargetCaregiverId] = useState<string | null>(null);
+
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
+    let unsubscribe: () => void;
 
-    getDoc(doc(db, 'users', user.uid)).then(snap => {
-      if (snap.exists()) setUserName(snap.data().patient?.name || '');
-    });
+    const fetchData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
 
-    const q = query(collection(db, 'users', user.uid, 'medicines'));
-    const unsubscribe = onSnapshot(q, snapshot => {
-      // ✅ إصلاح: cast صريح للـ data من Firestore
-      const meds = snapshot.docs.map(d => ({
-        id: d.id,
-        ...(d.data() as Omit<Medicine, 'id'>),
-      })) as Medicine[];
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userData = userDoc.data();
+        setUserName(userData?.patient?.name || userData?.patientName || '');
+        
+        const caregiverId = userData?.caregiverId || user.uid;
+        setTargetCaregiverId(caregiverId);
 
-      const today = new Date().toDateString();
-      const updatedMeds = meds.map(med => {
-        const doses = med.doses ?? [];
-        const updatedDoses = doses.map((dose: Dose) => {
-          if (dose.lastTakenDate !== today) {
-            return { ...dose, status: 'pending' as const };
-          }
-          return dose;
+        const q = query(collection(db, 'users', caregiverId, 'medicines'));
+        unsubscribe = onSnapshot(q, snapshot => {
+          const meds = snapshot.docs.map(d => ({
+            id: d.id,
+            ...(d.data() as Omit<Medicine, 'id'>),
+          })) as Medicine[];
+
+          const today = new Date().toDateString();
+          const updatedMeds = meds.map(med => {
+            const doses = med.doses ?? [];
+            const updatedDoses = doses.map((dose: Dose) => {
+              if (dose.lastTakenDate !== today) {
+                return { ...dose, status: 'pending' as const };
+              }
+              return dose;
+            });
+            return { ...med, doses: updatedDoses };
+          });
+
+          setMedicines(updatedMeds);
+          setIsLoading(false);
         });
-        return { ...med, doses: updatedDoses };
-      });
+      } catch (error) {
+        console.error('Error fetching medicines:', error);
+        setIsLoading(false);
+      }
+    };
 
-      setMedicines(updatedMeds);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchData();
+    return () => { if (unsubscribe) unsubscribe(); };
   }, []);
 
   const handleTakeDose = async (medicineId: string, doseIndex: number) => {
     try {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user || !targetCaregiverId) return;
 
-      const medRef = doc(db, 'users', user.uid, 'medicines', medicineId);
+      const medRef = doc(db, 'users', targetCaregiverId, 'medicines', medicineId);
       const snap = await getDoc(medRef);
       if (!snap.exists()) return;
 

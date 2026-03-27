@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { auth, db } from '../../firebaseConfig';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Audio } from 'expo-av';
 import { COLORS, SIZES } from '../../constants/theme';
 
@@ -25,9 +25,20 @@ export default function VoiceMemoriesScreen() {
   const fetchVoices = async () => {
     const user = auth.currentUser;
     if (user) {
-      const q = query(collection(db, "families", user.uid, "voice_messages"));
-      const snap = await getDocs(q);
-      setVoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      try {
+        const userDoc = await getDocs(collection(db, 'users'));
+        const userDocRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userDocRef);
+        const userData = userSnap.data();
+        
+        const targetCaregiverId = userData?.caregiverId || user.uid;
+
+        const q = query(collection(db, "families", targetCaregiverId, "voice_messages"));
+        const snap = await getDocs(q);
+        setVoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error('Error fetching voices:', error);
+      }
     }
     setLoading(false);
   };

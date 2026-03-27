@@ -78,30 +78,49 @@ export default function PatientMemoryBank() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      setIsLoading(false);
-      return;
-    }
+    let unsubscribe: () => void;
 
-    // استخدام المسار الموحد users/{uid}/memoryBank
-    const memoriesRef = collection(db, "users", user.uid, "memoryBank");
-    const q = query(memoriesRef, orderBy("createdAt", "desc"));
+    const fetchData = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMemories: Memory[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Memory));
-      setMemories(fetchedMemories);
-      setIsLoading(false);
-    }, (error) => {
-      console.error('Error fetching memories:', error);
-      setIsLoading(false);
-    });
+      try {
+        // 1. الحصول على معرف مقدم الرعاية المرتبط
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        // إذا كان المستخدم هو المريض المرتبط، نستخدم caregiverId
+        // أما إذا كان مقدم الرعاية نفسه في "عالم المريض"، نستخدم uid الخاص به
+        const targetCaregiverId = userData?.caregiverId || user.uid;
+
+        // 2. جلب الذكريات من مستند مقدم الرعاية
+        const memoriesRef = collection(db, "users", targetCaregiverId, "memoryBank");
+        const q = query(memoriesRef, orderBy("createdAt", "desc"));
+
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedMemories: Memory[] = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Memory));
+          setMemories(fetchedMemories);
+          setIsLoading(false);
+        }, (error) => {
+          console.error('Error fetching memories:', error);
+          setIsLoading(false);
+        });
+      } catch (error) {
+        console.error('Error in fetchData:', error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) unsubscribe();
       if (sound) {
         sound.unloadAsync();
       }
