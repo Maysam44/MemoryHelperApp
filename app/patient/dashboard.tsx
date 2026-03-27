@@ -62,7 +62,7 @@ export default function PatientDashboard() {
   const handleLongPress = () => {
     Alert.alert(
       'تأكيد الانتقال',
-      'هل أنت مقدم الرعاية وتود الانتقال إلى لوحة التحكم؟',
+      'هل تود العودة إلى لوحة تحكم مقدم الرعاية؟',
       [
         {
           text: 'إلغاء',
@@ -98,6 +98,8 @@ export default function PatientDashboard() {
     );
   }
 
+  // إذا كان المستخدم الحالي هو مقدم الرعاية (أي لديه حقل patient داخلي)، نستخدمه مباشرة
+  // أما إذا كان مريضاً مرتبطاً، فسيكون لديه حقل patient في جذر الوثيقة (بسبب تحديث scan-qr)
   const patient = userData?.patient;
 
   return (
@@ -111,8 +113,8 @@ export default function PatientDashboard() {
           style={styles.profileBtn}
           delayLongPress={2000} 
         >
-          {patient?.profileImage ? (
-            <Image source={{ uri: patient.profileImage }} style={styles.headerAvatar} />
+          {patient?.profileImage || userData?.patientImage ? (
+            <Image source={{ uri: patient?.profileImage || userData?.patientImage }} style={styles.headerAvatar} />
           ) : (
             <View style={[styles.headerAvatar, { backgroundColor: COLORS.primary + '20' }]}>
               <MaterialCommunityIcons name="account" size={30} color={COLORS.primary} />
@@ -175,27 +177,27 @@ export default function PatientDashboard() {
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>الاسم:</Text>
-                <Text style={styles.infoValue}>{patient?.name}</Text>
+                <Text style={styles.infoValue}>{patient?.name || userData?.patientName || 'غير محدد'}</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>العمر:</Text>
-                <Text style={styles.infoValue}>{patient?.age} سنة</Text>
+                <Text style={styles.infoValue}>{patient?.age || userData?.patientAge || 'غير محدد'} سنة</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>الوظيفة:</Text>
-                <Text style={styles.infoValue}>{patient?.job || 'غير محدد'}</Text>
+                <Text style={styles.infoValue}>{patient?.job || userData?.patientJob || 'غير محدد'}</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>الأشياء التي أحبها:</Text>
-                <Text style={styles.infoValue}>{patient?.likes || 'غير محدد'}</Text>
+                <Text style={styles.infoValue}>{patient?.likes || userData?.patientLikes || 'غير محدد'}</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>معلومات إضافية:</Text>
-                <Text style={styles.infoValue}>{patient?.additionalInfo || 'لا يوجد'}</Text>
+                <Text style={styles.infoValue}>{patient?.additionalInfo || userData?.additionalInfo || 'لا يوجد'}</Text>
               </View>
 
               <View style={styles.switchTip}>

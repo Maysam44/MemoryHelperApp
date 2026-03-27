@@ -127,21 +127,30 @@ export default function ScanQRScreen() {
         const patientDocRef = doc(db, 'users', currentUser.uid);
         const patientDocSnap = await getDoc(patientDocRef);
 
+        // تجهيز بيانات المريض من وثيقة مقدم الرعاية لضمان المزامنة
+        const patientDataToSync = {
+          caregiverId: caregiverId,
+          role: 'patient',
+          linkedAt: new Date().toISOString(),
+          // نسخ الكائن بالكامل إذا وجد
+          patient: caregiverData.patient || {
+            name: patientName || 'المريض',
+            age: caregiverData.patientAge || null,
+            stage: caregiverData.patientStage || null
+          },
+          // للحفاظ على التوافق مع الحقول القديمة
+          patientName: patientName || caregiverData.patientName || 'المريض',
+          patientAge: caregiverData.patientAge || (caregiverData.patient ? caregiverData.patient.age : null),
+          patientStage: caregiverData.patientStage || (caregiverData.patient ? caregiverData.patient.stage : null),
+          displayName: patientName || 'المريض',
+        };
+
         if (patientDocSnap.exists()) {
-          await updateDoc(patientDocRef, {
-            caregiverId: caregiverId,
-            role: 'patient',
-            linkedAt: new Date().toISOString(),
-          });
-          console.log('✓ Step 5a Success: Patient document updated');
+          await updateDoc(patientDocRef, patientDataToSync);
+          console.log('✓ Step 5a Success: Patient document updated with full data');
         } else {
-          await setDoc(patientDocRef, {
-            caregiverId: caregiverId,
-            role: 'patient',
-            linkedAt: new Date().toISOString(),
-            displayName: patientName || 'المريض',
-          });
-          console.log('✓ Step 5b Success: Patient document created');
+          await setDoc(patientDocRef, patientDataToSync);
+          console.log('✓ Step 5b Success: Patient document created with full data');
         }
       } catch (err: any) {
         console.error('✗ Step 5 Failed: Save Patient Error', err);
